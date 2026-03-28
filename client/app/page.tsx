@@ -66,14 +66,23 @@ export default function Home() {
       </section>
 
       <section className="flex flex-col gap-4">
-        <button
-          type="button"
-          onClick={createGame}
-          disabled={busy}
-          className="rounded border border-[#22ff66] bg-[#0d1a0f] py-3 text-center text-sm font-bold uppercase tracking-wider text-[#22ff66] transition hover:bg-[#142818] disabled:opacity-50"
-        >
-          {busy ? "Creating…" : "Create Game"}
-        </button>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <button
+            type="button"
+            onClick={createGame}
+            disabled={busy}
+            className="flex-1 rounded border border-[#22ff66] bg-[#0d1a0f] py-3 text-center text-sm font-bold uppercase tracking-wider text-[#22ff66] transition hover:bg-[#142818] disabled:opacity-50"
+          >
+            {busy ? "Creating…" : "Create Game"}
+          </button>
+          <button
+            type="button"
+            onClick={() => router.push("/leaderboard")}
+            className="flex-1 rounded border border-zinc-600 bg-zinc-950 py-3 text-center text-sm font-bold uppercase tracking-wider text-[#22ff66] transition hover:border-[#22ff66]/60 hover:bg-zinc-900"
+          >
+            Leaderboard
+          </button>
+        </div>
 
         <div className="flex flex-col gap-2 sm:flex-row">
           <input

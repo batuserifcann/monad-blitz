@@ -238,6 +238,19 @@ export class ContractService {
     return [...list];
   }
 
+  async getPlayerStats(player: string): Promise<{
+    wins: bigint;
+    kills: bigint;
+    earnings: bigint;
+  }> {
+    const r = await this.contract.getPlayerStats(player);
+    return {
+      wins: r[0] as bigint,
+      kills: r[1] as bigint,
+      earnings: r[2] as bigint,
+    };
+  }
+
   private parseGameCreated(receipt: ContractTransactionReceipt): bigint {
     const iface = this.contract.interface;
     for (const log of receipt.logs) {

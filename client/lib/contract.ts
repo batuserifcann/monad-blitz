@@ -1,6 +1,13 @@
 "use client";
 
-import { BrowserProvider, Contract, ethers, formatEther, getAddress } from "ethers";
+import {
+  BrowserProvider,
+  Contract,
+  ethers,
+  formatEther,
+  getAddress,
+  JsonRpcProvider,
+} from "ethers";
 
 const MONAD_CHAIN_ID = BigInt(10143);
 const MONAD_HEX = "0x279F";
@@ -10,6 +17,7 @@ const TANK_BLITZ_ABI = [
   "function getGameInfo(uint256 gameId) view returns (uint8 status, uint256 playerCount, uint256 prizePool)",
   "function getPlayer(uint256 gameId, address player) view returns (uint256 monBalance, uint16 hp, uint16 ammo, uint16 attackPower, bool joined)",
   "function getPlayerList(uint256 gameId) view returns (address[] memory)",
+  "function getPlayerStats(address player) view returns (uint256 wins, uint256 kills, uint256 earnings)",
 ] as const;
 
 function getContractAddress(): string {
@@ -139,4 +147,17 @@ export async function readPlayerList(gameId: bigint): Promise<string[]> {
   const c = getTankBlitzContract(provider);
   const list = await c.getPlayerList(gameId);
   return [...list] as string[];
+}
+
+/** Public read; uses RPC only (no wallet). */
+export async function readPlayerStats(player: string) {
+  const provider = new JsonRpcProvider(getRpcUrl());
+  const c = getTankBlitzContract(provider);
+  const a = getAddress(player);
+  const r = await c.getPlayerStats(a);
+  return {
+    wins: r[0] as bigint,
+    kills: r[1] as bigint,
+    earnings: r[2] as bigint,
+  };
 }

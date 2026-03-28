@@ -62,6 +62,10 @@ app.get("/api/game/:gameId", async (req, res) => {
   }
 });
 
+app.get("/api/leaderboard-addresses", (_req, res) => {
+  res.json({ addresses: gameManager.getLeaderboardAddresses() });
+});
+
 io.on("connection", (socket) => {
   socket.on("join-game", async (msg) => {
     try {

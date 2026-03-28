@@ -4,15 +4,30 @@ import type { ContractService } from "../blockchain/ContractService.js";
 import type { JoinGameMessage, PlayerInputMessage } from "../types.js";
 import { GameState } from "./GameState.js";
 
+const MAX_LEADERBOARD_ADDRESSES = 500;
+
 export class GameManager {
   private readonly games = new Map<string, GameState>();
   private readonly countdownTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly io: Server;
   private readonly contractService: ContractService;
+  private readonly knownPlayerAddresses = new Set<string>();
 
   constructor(io: Server, contractService: ContractService) {
     this.io = io;
     this.contractService = contractService;
+  }
+
+  private addKnownLeaderboardAddress(addr: string): void {
+    try {
+      this.knownPlayerAddresses.add(getAddress(addr));
+    } catch {
+      /* ignore invalid */
+    }
+  }
+
+  getLeaderboardAddresses(): string[] {
+    return [...this.knownPlayerAddresses].slice(0, MAX_LEADERBOARD_ADDRESSES);
   }
 
   async createGameFromApi(): Promise<{ gameId: string }> {
@@ -24,7 +39,12 @@ export class GameManager {
       this.io,
       this.contractService,
       room,
-      () => this.cleanupGame(key)
+      () => this.cleanupGame(key),
+      (evt) => {
+        if (evt.killer) this.addKnownLeaderboardAddress(evt.killer);
+        if (evt.victim) this.addKnownLeaderboardAddress(evt.victim);
+        if (evt.winner) this.addKnownLeaderboardAddress(evt.winner);
+      }
     );
     this.games.set(key, gs);
     return { gameId: key };
@@ -108,6 +128,8 @@ export class GameManager {
 
     const room = gs.room;
     await socket.join(room);
+
+    this.addKnownLeaderboardAddress(playerAddress);
 
     gs.addPlayer(socket.id, playerAddress, p.ammo, p.monBalance);
     socket.data.gameId = gameId;

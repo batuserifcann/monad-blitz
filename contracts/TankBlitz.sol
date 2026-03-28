@@ -44,6 +44,11 @@ contract TankBlitz {
     mapping(uint256 => Game) private games;
     uint256 public nextGameId;
 
+    /// @notice Lifetime stats across all games (indexed by player wallet).
+    mapping(address => uint256) public totalWins;
+    mapping(address => uint256) public totalKills;
+    mapping(address => uint256) public totalEarnings;
+
     modifier onlyServer() {
         require(msg.sender == server, "Not server");
         _;
@@ -149,6 +154,8 @@ contract TankBlitz {
         g.players[victim].monBalance = 0;
         g.players[victim].hp = 0;
 
+        totalKills[killer] += 1;
+
         emit KillRecorded(gameId, killer, victim, victimMon);
     }
 
@@ -165,6 +172,9 @@ contract TankBlitz {
 
         uint256 protocolFee = (pool * PROTOCOL_FEE_BPS) / 10_000;
         uint256 winnerShare = pool - protocolFee;
+
+        totalWins[winner] += 1;
+        totalEarnings[winner] += winnerShare;
 
         g.prizePool = 0;
         g.players[winner].monBalance = 0;
@@ -215,6 +225,14 @@ contract TankBlitz {
             return new address[](0);
         }
         return g.playerList;
+    }
+
+    function getPlayerStats(address player)
+        external
+        view
+        returns (uint256 wins, uint256 kills, uint256 earnings)
+    {
+        return (totalWins[player], totalKills[player], totalEarnings[player]);
     }
 
     receive() external payable {

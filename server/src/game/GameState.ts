@@ -81,18 +81,30 @@ export class GameState {
   private ended = false;
   private tickCounter = 0;
 
+  private readonly onLeaderboard?: (e: {
+    killer?: string;
+    victim?: string;
+    winner?: string;
+  }) => void;
+
   constructor(
     gameId: bigint,
     io: Server,
     contractService: ContractService,
     room: string,
-    onEnded: () => void
+    onEnded: () => void,
+    onLeaderboard?: (e: {
+      killer?: string;
+      victim?: string;
+      winner?: string;
+    }) => void
   ) {
     this.gameId = gameId;
     this.io = io;
     this.contractService = contractService;
     this.room = room;
     this.onEnded = onEnded;
+    this.onLeaderboard = onLeaderboard;
     this.tickHandle = setInterval(() => this.tick(), TICK_MS);
   }
 
@@ -351,6 +363,11 @@ export class GameState {
       monTransferred: transferred,
     });
 
+    this.onLeaderboard?.({
+      killer: killer.address,
+      victim: victim.address,
+    });
+
     void this.contractService.recordKill(
       this.gameId,
       killer.address,
@@ -371,6 +388,7 @@ export class GameState {
 
     try {
       const payouts = await this.contractService.endGame(this.gameId, winner.address);
+      this.onLeaderboard?.({ winner: winner.address });
       this.io.to(this.room).emit("game-ended", {
         winner: winner.address,
         winnerPayout: payouts.winnerPayout.toString(),

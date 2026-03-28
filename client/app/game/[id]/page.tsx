@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Socket } from "socket.io-client";
+import { AiCommentary } from "@/components/AiCommentary";
 import { GameCanvas } from "@/components/GameCanvas";
 import { GameHUD } from "@/components/GameHUD";
 import { GameOver } from "@/components/GameOver";
@@ -59,6 +60,10 @@ export default function GameRoomPage() {
   const [txFeedRows, setTxFeedRows] = useState<TxFeedRow[]>([]);
   const [killFlash, setKillFlash] = useState(false);
   const [ammoCount, setAmmoCount] = useState(20);
+  const [killCommentNonce, setKillCommentNonce] = useState(0);
+  const [killCommentPayload, setKillCommentPayload] = useState<KillEntry | null>(
+    null
+  );
 
   const keysRef = useRef<PlayerKeys>(defaultKeys());
   /** True while primary mouse button held (server uses rising edge on shoot). */
@@ -143,6 +148,13 @@ export default function GameRoomPage() {
       /* kill flash */
       setKillFlash(true);
       setTimeout(() => setKillFlash(false), 400);
+
+      setKillCommentPayload({
+        killer: payload.killer,
+        victim: payload.victim,
+        monWei: payload.monTransferred,
+      });
+      setKillCommentNonce((n) => n + 1);
 
       /* sound: kill vs hit */
       const addr = address?.toLowerCase();
@@ -443,6 +455,19 @@ export default function GameRoomPage() {
                 killFeed={killFeed}
                 centerMessage={centerMessage}
                 killFlash={killFlash}
+              />
+              <AiCommentary
+                killNonce={killCommentNonce}
+                killPayload={
+                  killCommentPayload
+                    ? {
+                        killer: killCommentPayload.killer,
+                        victim: killCommentPayload.victim,
+                        monTransferred: killCommentPayload.monWei,
+                      }
+                    : null
+                }
+                gameEndPayload={ended}
               />
             </div>
             <p className="mt-2 text-xs text-zinc-500">
