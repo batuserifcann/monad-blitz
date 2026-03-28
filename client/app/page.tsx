@@ -14,7 +14,16 @@ export default function Home() {
     setErr(null);
     setBusy(true);
     try {
-      const res = await fetch("/api/create-game", { method: "POST" });
+      const serverUrl = (process.env.NEXT_PUBLIC_SERVER_URL || "").replace(
+        /\/$/,
+        ""
+      );
+      if (!serverUrl) {
+        throw new Error(
+          "NEXT_PUBLIC_SERVER_URL is not set (add your Render backend URL in Vercel env)."
+        );
+      }
+      const res = await fetch(`${serverUrl}/api/create-game`, { method: "POST" });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         throw new Error((j as { error?: string }).error ?? res.statusText);
