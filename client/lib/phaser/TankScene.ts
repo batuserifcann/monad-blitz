@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { formatEther } from "ethers";
 import { gameViewBridge } from "./bridge";
 import { BULLET_RADIUS, TANK_RADIUS } from "../types";
 
@@ -217,7 +218,11 @@ export class TankScene extends Phaser.Scene {
         pts.setOrigin(0.5, 1);
         this.pointLabels.set(tank.id, pts);
       }
-      pts.setText(`${tank.points} pts`);
+      try {
+        pts.setText(`${Number(formatEther(tank.monBalance)).toFixed(2)} MON`);
+      } catch {
+        pts.setText("— MON");
+      }
       pts.setPosition(cx, cy - r - 8);
       pts.setStyle({ color: tank.alive ? "#88cc88" : "#666666" });
     });

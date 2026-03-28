@@ -8,7 +8,7 @@ export interface Tank {
   rotation: number;
   hp: number;
   ammo: number;
-  points: number;
+  monBalance: string;
   attackPower: number;
   alive: boolean;
   speed: number;
@@ -48,14 +48,13 @@ export interface GameStatePayload {
   tanks: Tank[];
   bullets: Bullet[];
   gameStatus: GameStatus;
-  protocolPoints: number;
   countdownSeconds?: number;
 }
 
 export interface PlayerKilledPayload {
   killer: string;
   victim: string;
-  pointsTransferred: number;
+  monTransferred: string;
 }
 
 export interface GameEndedPayload {

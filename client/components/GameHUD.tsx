@@ -1,11 +1,11 @@
 "use client";
 
-import type { GameStatePayload, Tank } from "@/lib/types";
+import { formatEther } from "ethers";
+import type { Tank } from "@/lib/types";
 
-type KillEntry = { killer: string; victim: string; points: number };
+type KillEntry = { killer: string; victim: string; monWei: string };
 
 type Props = {
-  snapshot: GameStatePayload | null;
   myTank: Tank | null;
   killFeed: KillEntry[];
   centerMessage?: string | null;
@@ -16,7 +16,15 @@ function short(a: string) {
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
 }
 
-export function GameHUD({ snapshot, myTank, killFeed, centerMessage, killFlash }: Props) {
+function fmtMon(wei: string): string {
+  try {
+    return `${formatEther(wei)} MON`;
+  } catch {
+    return wei;
+  }
+}
+
+export function GameHUD({ myTank, killFeed, centerMessage, killFlash }: Props) {
   const hp = myTank?.hp ?? 0;
   const hpMax = 100;
   const hpPct = Math.min(100, Math.max(0, (hp / hpMax) * 100));
@@ -45,12 +53,14 @@ export function GameHUD({ snapshot, myTank, killFeed, centerMessage, killFlash }
         </div>
       </div>
 
-      {/* Ammo + Points */}
+      {/* Ammo + MON */}
       <div className="absolute right-3 top-3 text-right">
         <div className="text-xs uppercase text-zinc-500">Ammo</div>
         <div className="font-mono text-lg text-[#22ff66]">{myTank?.ammo ?? "—"}</div>
-        <div className="mt-1 text-xs uppercase text-zinc-500">Points</div>
-        <div className="font-mono text-lg text-zinc-100">{myTank?.points ?? "—"}</div>
+        <div className="mt-1 text-xs uppercase text-zinc-500">Balance</div>
+        <div className="font-mono text-lg text-zinc-100">
+          {myTank ? fmtMon(myTank.monBalance) : "—"}
+        </div>
       </div>
 
       {/* Center message */}
@@ -81,17 +91,11 @@ export function GameHUD({ snapshot, myTank, killFeed, centerMessage, killFlash }
               <span className="font-bold text-red-400">{short(k.killer)}</span>
               <span className="font-bold uppercase text-zinc-400"> ELIMINATED </span>
               <span className="font-bold text-zinc-100">{short(k.victim)}</span>
-              <span className="text-zinc-600"> (+{k.points})</span>
+              <span className="text-zinc-600"> (+{fmtMon(k.monWei)})</span>
             </li>
           ))}
         </ul>
       </div>
-
-      {snapshot && (
-        <div className="absolute bottom-3 right-3 text-right text-[10px] text-zinc-600">
-          proto {snapshot.protocolPoints}
-        </div>
-      )}
 
       {/* CSS animations (injected once) */}
       <style>{`

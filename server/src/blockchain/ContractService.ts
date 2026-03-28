@@ -134,12 +134,11 @@ export class ContractService {
 
   async endGame(
     gameId: bigint,
-    winner: string,
-    winnerPoints: bigint
+    winner: string
   ): Promise<{ ownerPayout: bigint; winnerPayout: bigint }> {
     return this.queue.enqueue(async () => {
       try {
-        const tx = await this.contract.endGame(gameId, winner, winnerPoints);
+        const tx = await this.contract.endGame(gameId, winner);
         const receipt = (await tx.wait()) as ContractTransactionReceipt;
         const gid = gameId.toString();
         this.emitTxConfirmed(
@@ -154,29 +153,16 @@ export class ContractService {
     });
   }
 
-  async buyAmmo(gameId: bigint, player: string): Promise<void> {
-    return this.queue.enqueue(async () => {
-      try {
-        const tx = await this.contract.buyAmmo(gameId, player);
-        await tx.wait();
-      } catch (e) {
-        console.error("[ContractService] buyAmmo", e);
-      }
-    });
-  }
-
   async getGameInfo(gameId: bigint): Promise<{
     status: number;
     playerCount: string;
     prizePool: string;
-    protocolPoints: string;
   }> {
     const result = await this.contract.getGameInfo(gameId);
     return {
       status: Number(result[0]),
       playerCount: String(result[1]),
       prizePool: String(result[2]),
-      protocolPoints: String(result[3]),
     };
   }
 
@@ -184,7 +170,7 @@ export class ContractService {
     gameId: bigint,
     player: string
   ): Promise<{
-    points: string;
+    monBalance: string;
     hp: number;
     ammo: number;
     attackPower: number;
@@ -192,7 +178,7 @@ export class ContractService {
   }> {
     const result = await this.contract.getPlayer(gameId, player);
     return {
-      points: String(result[0]),
+      monBalance: String(result[0]),
       hp: Number(result[1]),
       ammo: Number(result[2]),
       attackPower: Number(result[3]),

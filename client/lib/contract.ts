@@ -6,9 +6,9 @@ const MONAD_CHAIN_ID = BigInt(10143);
 const MONAD_HEX = "0x279F";
 
 const TANK_BLITZ_ABI = [
-  "function registerPlayer(uint256 gameId) payable",
-  "function getGameInfo(uint256 gameId) view returns (uint8 status, uint256 playerCount, uint256 prizePool, uint256 protocolPoints)",
-  "function getPlayer(uint256 gameId, address player) view returns (uint256 points, uint16 hp, uint16 ammo, uint16 attackPower, bool joined)",
+  "function registerPlayer(uint256 gameId, uint256 ammoCount) payable",
+  "function getGameInfo(uint256 gameId) view returns (uint8 status, uint256 playerCount, uint256 prizePool)",
+  "function getPlayer(uint256 gameId, address player) view returns (uint256 monBalance, uint16 hp, uint16 ammo, uint16 attackPower, bool joined)",
   "function getPlayerList(uint256 gameId) view returns (address[] memory)",
 ] as const;
 
@@ -94,12 +94,18 @@ export function getTankBlitzContract(signerOrProvider: ethers.Signer | ethers.Pr
   return new Contract(getContractAddress(), TANK_BLITZ_ABI, signerOrProvider);
 }
 
-export async function registerPlayer(gameId: bigint): Promise<ethers.TransactionResponse> {
+const WEI_PER_BULLET = ethers.parseEther("0.01");
+
+export async function registerPlayer(
+  gameId: bigint,
+  ammoCount: number
+): Promise<ethers.TransactionResponse> {
   await ensureMonadTestnet();
   const provider = new BrowserProvider(getEthereum());
   const signer = await provider.getSigner();
   const c = getTankBlitzContract(signer);
-  return c.registerPlayer(gameId, { value: ethers.parseEther("0.1") }) as Promise<
+  const value = WEI_PER_BULLET * BigInt(ammoCount);
+  return c.registerPlayer(gameId, ammoCount, { value }) as Promise<
     ethers.TransactionResponse
   >;
 }
@@ -112,7 +118,6 @@ export async function readGameInfo(gameId: bigint) {
     status: Number(r[0]),
     playerCount: r[1] as bigint,
     prizePool: r[2] as bigint,
-    protocolPoints: r[3] as bigint,
   };
 }
 
@@ -121,7 +126,7 @@ export async function readPlayer(gameId: bigint, player: string) {
   const c = getTankBlitzContract(provider);
   const r = await c.getPlayer(gameId, player);
   return {
-    points: r[0] as bigint,
+    monBalance: r[0] as bigint,
     hp: Number(r[1]),
     ammo: Number(r[2]),
     attackPower: Number(r[3]),

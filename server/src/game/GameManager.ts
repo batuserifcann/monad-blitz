@@ -38,7 +38,6 @@ export class GameManager {
     status: number;
     playerCount: string;
     prizePool: string;
-    protocolPoints: string;
     playersOnChain: string[];
     serverLobbyPlayers: number;
     serverStatus?: string;
@@ -51,7 +50,6 @@ export class GameManager {
       status: info.status,
       playerCount: info.playerCount,
       prizePool: info.prizePool,
-      protocolPoints: info.protocolPoints,
       playersOnChain,
       serverLobbyPlayers: mem?.getTankCount() ?? 0,
       serverStatus: mem?.gameStatus,
@@ -89,8 +87,15 @@ export class GameManager {
       return;
     }
 
+    let p: {
+      monBalance: string;
+      hp: number;
+      ammo: number;
+      attackPower: number;
+      joined: boolean;
+    };
     try {
-      const p = await this.contractService.getPlayer(BigInt(gameId), playerAddress);
+      p = await this.contractService.getPlayer(BigInt(gameId), playerAddress);
       if (!p.joined) {
         socket.emit("error", { message: "Player not registered on-chain for this game" });
         return;
@@ -104,7 +109,7 @@ export class GameManager {
     const room = gs.room;
     await socket.join(room);
 
-    gs.addPlayer(socket.id, playerAddress);
+    gs.addPlayer(socket.id, playerAddress, p.ammo, p.monBalance);
     socket.data.gameId = gameId;
     socket.data.playerAddress = playerAddress;
 

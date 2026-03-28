@@ -17,10 +17,6 @@ const SHOT_COOLDOWN_MS = 200;
 const MIN_ATTACK_POWER = 25;
 const ATTACK_GAIN_ON_HIT = 25;
 const ATTACK_LOSS_ON_MISS = 25;
-const AMMO_PACK_COST = 10;
-const AMMO_PACK_SIZE = 10;
-/** Virtual points deducted per shot (off-chain simulation). */
-const SHOT_POINT_COST = 0.5;
 
 const SPAWNS: [number, number][] = [
   [120, 300],
@@ -45,7 +41,6 @@ export class GameState {
   private shootWasDown = new Map<string, boolean>();
 
   gameStatus: GameStatus = "waiting";
-  protocolPoints = 0;
   countdownEnd: number | null = null;
   private countdownStarting = false;
 
@@ -84,7 +79,12 @@ export class GameState {
     }
   }
 
-  addPlayer(socketId: string, address: string): void {
+  addPlayer(
+    socketId: string,
+    address: string,
+    ammo: number,
+    monBalanceWei: string
+  ): void {
     const idx = this.tanks.size;
     const spawn = SPAWNS[idx % SPAWNS.length]!;
     const tank: Tank = {
@@ -94,8 +94,8 @@ export class GameState {
       y: spawn[1],
       rotation: 0,
       hp: 100,
-      ammo: 20,
-      points: 100,
+      ammo,
+      monBalance: monBalanceWei,
       attackPower: 100,
       alive: true,
       speed: 5,
@@ -125,7 +125,6 @@ export class GameState {
     );
   }
 
-
   getSnapshot(): GameStatePayload {
     let countdownSeconds: number | undefined;
     if (this.gameStatus === "countdown" && this.countdownEnd !== null) {
@@ -138,7 +137,6 @@ export class GameState {
       tanks: [...this.tanks.values()],
       bullets: this.bullets,
       gameStatus: this.gameStatus,
-      protocolPoints: this.protocolPoints,
       countdownSeconds,
     };
   }
@@ -200,43 +198,25 @@ export class GameState {
 
       if (edge) {
         const last = this.lastShootAt.get(id) ?? 0;
-        if (now - last >= SHOT_COOLDOWN_MS) {
-          let boughtAmmo = false;
-          if (tank.ammo === 0 && tank.points >= AMMO_PACK_COST) {
-            tank.points -= AMMO_PACK_COST;
-            tank.ammo += AMMO_PACK_SIZE;
-            boughtAmmo = true;
-            this.io.to(this.room).emit("ammo-purchased", {
-              gameId: this.gameId.toString(),
-              playerAddress: tank.address,
-              remainingPoints: tank.points,
-            });
-            void this.contractService.buyAmmo(this.gameId, tank.address);
-          }
-          if (tank.ammo > 0 && tank.points >= SHOT_POINT_COST) {
-            this.lastShootAt.set(id, now);
-            tank.ammo -= 1;
-            tank.points -= SHOT_POINT_COST;
-            this.protocolPoints += SHOT_POINT_COST;
+        if (now - last >= SHOT_COOLDOWN_MS && tank.ammo > 0) {
+          this.lastShootAt.set(id, now);
+          tank.ammo -= 1;
 
-            const bx = tank.x + Math.cos(ang) * (TANK_RADIUS + BULLET_RADIUS + 2);
-            const by = tank.y + Math.sin(ang) * (TANK_RADIUS + BULLET_RADIUS + 2);
-            const dx = Math.cos(ang) * BULLET_SPEED;
-            const dy = Math.sin(ang) * BULLET_SPEED;
+          const bx = tank.x + Math.cos(ang) * (TANK_RADIUS + BULLET_RADIUS + 2);
+          const by = tank.y + Math.sin(ang) * (TANK_RADIUS + BULLET_RADIUS + 2);
+          const dx = Math.cos(ang) * BULLET_SPEED;
+          const dy = Math.sin(ang) * BULLET_SPEED;
 
-            this.bullets.push({
-              id: `b-${this.nextBulletId++}`,
-              ownerId: id,
-              x: bx,
-              y: by,
-              dx,
-              dy,
-              speed: BULLET_SPEED,
-              age: 0,
-            });
-          } else if (boughtAmmo) {
-            this.lastShootAt.set(id, now);
-          }
+          this.bullets.push({
+            id: `b-${this.nextBulletId++}`,
+            ownerId: id,
+            x: bx,
+            y: by,
+            dx,
+            dy,
+            speed: BULLET_SPEED,
+            age: 0,
+          });
         }
       }
     }
@@ -301,16 +281,17 @@ export class GameState {
   }
 
   private applyKill(killer: Tank, victim: Tank): void {
-    const transferred = victim.points;
-    killer.points += victim.points;
-    victim.points = 0;
+    const transferred = victim.monBalance;
+    const sum = (BigInt(killer.monBalance) + BigInt(victim.monBalance)).toString();
+    killer.monBalance = sum;
+    victim.monBalance = "0";
     victim.hp = 0;
     victim.alive = false;
 
     this.io.to(this.room).emit("player-killed", {
       killer: killer.address,
       victim: victim.address,
-      pointsTransferred: transferred,
+      monTransferred: transferred,
     });
 
     void this.contractService.recordKill(
@@ -331,14 +312,8 @@ export class GameState {
     this.gameStatus = "ended";
     this.stop();
 
-    const winnerPoints = BigInt(Math.floor(winner.points));
-
     try {
-      const payouts = await this.contractService.endGame(
-        this.gameId,
-        winner.address,
-        winnerPoints
-      );
+      const payouts = await this.contractService.endGame(this.gameId, winner.address);
       this.io.to(this.room).emit("game-ended", {
         winner: winner.address,
         winnerPayout: payouts.winnerPayout.toString(),

@@ -1,21 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-/// @title Tank Blitz — virtual points on-chain; real MON is only the entry prize pool.
+/// @title Tank Blitz — ammo is paid in MON; balances move on kills; prize pool splits on game end.
 contract TankBlitz {
     address public immutable server;
     address public owner;
 
-    uint256 public constant ENTRY_FEE = 0.1 ether;
-    uint256 public constant STARTING_POINTS = 100;
     uint16 public constant STARTING_HP = 100;
-    uint16 public constant STARTING_AMMO = 20;
     /// @dev Stored as 100 for 10.0 (one decimal place of precision).
     uint16 public constant ATTACK_POWER = 100;
-    uint256 public constant AMMO_POINT_COST = 10;
-    uint256 public constant SHOT_PROTOCOL_POINTS = 1;
     uint8 public constant MAX_PLAYERS = 5;
     uint8 public constant MIN_PLAYERS = 2;
+
+    uint16 public constant MIN_AMMO = 10;
+    uint16 public constant MAX_AMMO = 50;
+    uint256 public constant AMMO_PRICE = 0.01 ether;
+    uint256 public constant PROTOCOL_FEE_BPS = 500;
 
     bool private _entered;
 
@@ -26,7 +26,7 @@ contract TankBlitz {
     }
 
     struct Player {
-        uint256 points;
+        uint256 monBalance;
         uint16 hp;
         uint16 ammo;
         uint16 attackPower;
@@ -39,7 +39,6 @@ contract TankBlitz {
         address[] playerList;
         mapping(address => Player) players;
         uint256 prizePool;
-        uint256 protocolPoints;
     }
 
     mapping(uint256 => Game) private games;
@@ -64,10 +63,8 @@ contract TankBlitz {
         uint256 indexed gameId,
         address indexed killer,
         address indexed victim,
-        uint256 pointsTransferred
+        uint256 monTransferred
     );
-    event AmmoPurchase(uint256 indexed gameId, address indexed player);
-    event ShotFired(uint256 indexed gameId, address indexed shooter);
     event GameEnded(
         uint256 indexed gameId,
         address indexed winner,
@@ -90,9 +87,10 @@ contract TankBlitz {
         emit GameCreated(gameId);
     }
 
-    /// @notice Player pays the native token entry fee; receives starting virtual stats.
-    function registerPlayer(uint256 gameId) external payable {
-        require(msg.value == ENTRY_FEE, "Entry fee");
+    /// @notice Player pays MON for ammo; stake becomes in-game MON balance.
+    function registerPlayer(uint256 gameId, uint256 ammoCount) external payable {
+        require(ammoCount >= uint256(MIN_AMMO) && ammoCount <= uint256(MAX_AMMO), "Ammo");
+        require(msg.value == ammoCount * AMMO_PRICE, "Payment");
         Game storage g = games[gameId];
         require(g.initialized, "No game");
         require(g.status == GameStatus.Waiting, "Not lobby");
@@ -100,9 +98,9 @@ contract TankBlitz {
         require(!g.players[msg.sender].joined, "Already joined");
 
         g.players[msg.sender] = Player({
-            points: STARTING_POINTS,
+            monBalance: msg.value,
             hp: STARTING_HP,
-            ammo: STARTING_AMMO,
+            ammo: uint16(ammoCount),
             attackPower: ATTACK_POWER,
             joined: true
         });
@@ -133,82 +131,38 @@ contract TankBlitz {
         require(g.players[killer].joined && g.players[victim].joined, "Not players");
         require(killer != victim, "Self");
 
-        uint256 victimPoints = g.players[victim].points;
-        g.players[killer].points += victimPoints;
-        g.players[victim].points = 0;
+        uint256 victimMon = g.players[victim].monBalance;
+        g.players[killer].monBalance += victimMon;
+        g.players[victim].monBalance = 0;
         g.players[victim].hp = 0;
 
-        emit KillRecorded(gameId, killer, victim, victimPoints);
+        emit KillRecorded(gameId, killer, victim, victimMon);
     }
 
-    function buyAmmo(uint256 gameId, address player) external onlyServer {
-        Game storage g = games[gameId];
-        require(g.initialized, "No game");
-        require(g.status == GameStatus.Active, "Not active");
-        require(g.players[player].joined, "Not player");
-        require(g.players[player].points >= AMMO_POINT_COST, "Points");
-
-        g.players[player].points -= AMMO_POINT_COST;
-        g.players[player].ammo += 10;
-
-        emit AmmoPurchase(gameId, player);
-    }
-
-    function recordShot(uint256 gameId, address shooter) external onlyServer {
-        Game storage g = games[gameId];
-        require(g.initialized, "No game");
-        require(g.status == GameStatus.Active, "Not active");
-        require(g.players[shooter].joined, "Not player");
-        require(g.players[shooter].ammo > 0, "No ammo");
-        require(g.players[shooter].points >= SHOT_PROTOCOL_POINTS, "Points");
-
-        g.players[shooter].ammo -= 1;
-        g.players[shooter].points -= SHOT_PROTOCOL_POINTS;
-        g.protocolPoints += SHOT_PROTOCOL_POINTS;
-
-        emit ShotFired(gameId, shooter);
-    }
-
-    /// @notice Splits the real MON prize pool from server-authoritative winner points (virtual economy).
-    /// @dev totalExpected = STARTING_POINTS * playerCount. Consumed points are implied by totalExpected - winnerPoints.
-    ///      Owner share = pool * consumed / totalExpected; winner gets the remainder.
-    function endGame(
-        uint256 gameId,
-        address winner,
-        uint256 winnerPoints
-    ) external onlyServer nonReentrant {
+    /// @notice 5% protocol fee, 95% to winner (of total prize pool).
+    function endGame(uint256 gameId, address winner) external onlyServer nonReentrant {
         Game storage g = games[gameId];
         require(g.initialized, "No game");
         require(g.status == GameStatus.Active, "Not active");
         require(g.players[winner].joined, "Not player");
 
-        uint256 playerCount = g.playerList.length;
-        uint256 totalExpected = STARTING_POINTS * playerCount;
-        require(totalExpected > 0, "Total points");
-        require(winnerPoints <= totalExpected, "Winner points");
-
         uint256 pool = g.prizePool;
         require(address(this).balance >= pool, "Balance");
+        require(pool > 0, "Pool");
 
-        uint256 consumed = totalExpected - winnerPoints;
-        uint256 ownerShare = (pool * consumed) / totalExpected;
-        uint256 maxOwnerShare = (pool * 20) / 100;
-        if (ownerShare > maxOwnerShare) {
-            ownerShare = maxOwnerShare;
-        }
-        uint256 winnerShare = pool - ownerShare;
+        uint256 protocolFee = (pool * PROTOCOL_FEE_BPS) / 10_000;
+        uint256 winnerShare = pool - protocolFee;
 
         g.prizePool = 0;
-        g.protocolPoints = 0;
-        g.players[winner].points = 0;
+        g.players[winner].monBalance = 0;
         g.status = GameStatus.Ended;
 
-        (bool okOwner, ) = payable(owner).call{value: ownerShare}("");
+        (bool okOwner, ) = payable(owner).call{value: protocolFee}("");
         require(okOwner, "Owner pay");
         (bool okWinner, ) = payable(winner).call{value: winnerShare}("");
         require(okWinner, "Winner pay");
 
-        emit GameEnded(gameId, winner, ownerShare, winnerShare);
+        emit GameEnded(gameId, winner, protocolFee, winnerShare);
     }
 
     function getGameInfo(uint256 gameId)
@@ -217,27 +171,21 @@ contract TankBlitz {
         returns (
             uint8 status,
             uint256 playerCount,
-            uint256 prizePool,
-            uint256 protocolPoints
+            uint256 prizePool
         )
     {
         Game storage g = games[gameId];
         if (!g.initialized) {
-            return (0, 0, 0, 0);
+            return (0, 0, 0);
         }
-        return (
-            uint8(g.status),
-            g.playerList.length,
-            g.prizePool,
-            g.protocolPoints
-        );
+        return (uint8(g.status), g.playerList.length, g.prizePool);
     }
 
     function getPlayer(uint256 gameId, address player)
         external
         view
         returns (
-            uint256 points,
+            uint256 monBalance,
             uint16 hp,
             uint16 ammo,
             uint16 attackPower,
@@ -245,7 +193,7 @@ contract TankBlitz {
         )
     {
         Player storage p = games[gameId].players[player];
-        return (p.points, p.hp, p.ammo, p.attackPower, p.joined);
+        return (p.monBalance, p.hp, p.ammo, p.attackPower, p.joined);
     }
 
     function getPlayerList(uint256 gameId) external view returns (address[] memory) {

@@ -1,5 +1,6 @@
 "use client";
 
+import { formatEther } from "ethers";
 import type { ReactNode } from "react";
 import type { GameStatePayload } from "@/lib/types";
 
@@ -11,6 +12,14 @@ type Props = {
 
 function shortAddr(a: string) {
   return a.length > 10 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a;
+}
+
+function fmtMon(wei: string): string {
+  try {
+    return `${formatEther(wei)} MON`;
+  } catch {
+    return wei;
+  }
 }
 
 function hpBarClass(hp: number, alive: boolean): string {
@@ -62,11 +71,11 @@ export function Lobby({ snapshot, txFeed }: Props) {
                 </div>
               </div>
               <div
-                className={`mt-1 flex justify-between text-xs ${alive ? "text-zinc-400" : "text-zinc-500"}`}
+                className={`mt-1 flex flex-wrap justify-between gap-x-2 gap-y-0.5 text-xs ${alive ? "text-zinc-400" : "text-zinc-500"}`}
               >
                 <span>HP {t.hp}</span>
                 <span>Ammo {t.ammo}</span>
-                <span>{t.points} pts</span>
+                <span>{fmtMon(t.monBalance)}</span>
               </div>
             </li>
           );

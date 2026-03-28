@@ -57,7 +57,7 @@ export default function Home() {
           Tank Blitz
         </h1>
         <p className="text-zinc-400">
-          Connect MetaMask on Monad Testnet, stake 0.1 MON, and battle in real time.
+          Connect MetaMask on Monad Testnet, choose your ammo (10–50 bullets at 0.01 MON each), and battle in real time.
         </p>
       </header>
 

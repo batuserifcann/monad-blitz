@@ -30,7 +30,7 @@ import {
   type TxConfirmedPayload,
 } from "@/lib/types";
 
-type KillEntry = { killer: string; victim: string; points: number };
+type KillEntry = { killer: string; victim: string; monWei: string };
 
 /** Match server tick (~30Hz); avoid flooding socket.io with 60+ emits/sec from rAF. */
 const INPUT_EMIT_HZ = 30;
@@ -57,6 +57,7 @@ export default function GameRoomPage() {
   const [killFeed, setKillFeed] = useState<KillEntry[]>([]);
   const [confirmedTxs, setConfirmedTxs] = useState<TxConfirmedPayload[]>([]);
   const [killFlash, setKillFlash] = useState(false);
+  const [ammoCount, setAmmoCount] = useState(20);
 
   const keysRef = useRef<PlayerKeys>(defaultKeys());
   /** True while primary mouse button held (server uses rising edge on shoot). */
@@ -124,14 +125,14 @@ export default function GameRoomPage() {
     const onKill = (payload: {
       killer: string;
       victim: string;
-      pointsTransferred: number;
+      monTransferred: string;
     }) => {
       setKillFeed((prev) => {
         const next = [
           {
             killer: payload.killer,
             victim: payload.victim,
-            points: payload.pointsTransferred,
+            monWei: payload.monTransferred,
           },
           ...prev,
         ];
@@ -304,7 +305,7 @@ export default function GameRoomPage() {
     setBusy(true);
     setJoinError(null);
     try {
-      const tx = await registerPlayer(BigInt(gameId));
+      const tx = await registerPlayer(BigInt(gameId), ammoCount);
       await tx.wait();
 
       await new Promise<void>((resolve, reject) => {
@@ -359,8 +360,22 @@ export default function GameRoomPage() {
 
       {!joined && (
         <div className="rounded border border-zinc-800 bg-zinc-950/80 p-4">
+          <label className="mb-2 block text-sm text-zinc-400">
+            Ammo (10–50 bullets)
+            <input
+              type="range"
+              min={10}
+              max={50}
+              value={ammoCount}
+              onChange={(e) => setAmmoCount(Number(e.target.value))}
+              className="mt-2 block w-full accent-[#22ff66]"
+            />
+          </label>
+          <p className="mb-3 font-mono text-sm text-[#22ff66]">
+            {ammoCount} bullets = {(ammoCount * 0.01).toFixed(2)} MON stake
+          </p>
           <p className="mb-3 text-sm text-zinc-400">
-            Pay entry (0.1 MON) and register on-chain, then join the live room.
+            Pay your stake on-chain, then join the live room.
           </p>
           <button
             type="button"
@@ -395,7 +410,6 @@ export default function GameRoomPage() {
                 }}
               />
               <GameHUD
-                snapshot={snapshot}
                 myTank={myTank}
                 killFeed={killFeed}
                 centerMessage={centerMessage}
