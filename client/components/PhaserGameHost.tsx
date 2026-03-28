@@ -9,11 +9,14 @@ import type { GameStatePayload } from "@/lib/types";
 type Props = {
   snapshot: GameStatePayload | null;
   myTankId: string | null;
+  onCanvasReady?: (canvas: HTMLCanvasElement) => void;
 };
 
-export function PhaserGameHost({ snapshot, myTankId }: Props) {
+export function PhaserGameHost({ snapshot, myTankId, onCanvasReady }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
+  const onCanvasReadyRef = useRef(onCanvasReady);
+  onCanvasReadyRef.current = onCanvasReady;
 
   useEffect(() => {
     gameViewBridge.snapshot = snapshot;
@@ -34,8 +37,15 @@ export function PhaserGameHost({ snapshot, myTankId }: Props) {
       scale: {
         mode: Phaser.Scale.NONE,
       },
+      input: {
+        keyboard: false,
+      },
     });
     gameRef.current = game;
+
+    const canvas = game.canvas as HTMLCanvasElement;
+    canvas.style.pointerEvents = "none";
+    onCanvasReadyRef.current?.(canvas);
 
     return () => {
       game.destroy(true);

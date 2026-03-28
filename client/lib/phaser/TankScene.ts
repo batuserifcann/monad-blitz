@@ -20,6 +20,14 @@ export class TankScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Input is handled by the DOM (page.tsx); Phaser must not capture keys/pointer.
+    const kb = this.input.keyboard;
+    if (kb) kb.enabled = false;
+    const canvas = this.game.canvas;
+    if (canvas) {
+      canvas.style.pointerEvents = "none";
+    }
+
     this.g = this.add.graphics();
     this.bg = this.add
       .rectangle(0, 0, 800, 600, 0x0a0d0a, 1)

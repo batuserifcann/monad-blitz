@@ -47,6 +47,7 @@ export class GameState {
 
   private tickHandle: ReturnType<typeof setInterval> | null = null;
   private ended = false;
+  private tickCounter = 0;
 
   constructor(
     gameId: bigint,
@@ -93,7 +94,7 @@ export class GameState {
       points: 100,
       attackPower: 100,
       alive: true,
-      speed: 3,
+      speed: 5,
     };
     this.tanks.set(socketId, tank);
   }
@@ -144,6 +145,16 @@ export class GameState {
 
   private tick(): void {
     if (this.ended) return;
+
+    this.tickCounter += 1;
+    if (this.tickCounter % 100 === 0) {
+      console.log("[GameState] tick", this.tickCounter, {
+        gameId: String(this.gameId),
+        status: this.gameStatus,
+        inputSockets: this.inputs.size,
+        tanks: this.tanks.size,
+      });
+    }
 
     if (this.gameStatus === "active") {
       this.simulateTick();

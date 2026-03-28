@@ -19,6 +19,7 @@ function CanvasPlaceholder() {
 type Props = {
   snapshot: GameStatePayload | null;
   myTankId: string | null;
+  onCanvasReady?: (canvas: HTMLCanvasElement) => void;
 };
 
 export function GameCanvas(props: Props) {

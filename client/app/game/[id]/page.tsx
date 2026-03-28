@@ -10,15 +10,20 @@ import { Lobby } from "@/components/Lobby";
 import { WalletConnect } from "@/components/WalletConnect";
 import { registerPlayer } from "@/lib/contract";
 import { disconnectSocket, getSocket } from "@/lib/socket";
-import type {
-  GameEndedPayload,
-  GameStatePayload,
-  PlayerInputMessage,
-  PlayerKeys,
-  Tank,
+import {
+  ARENA_HEIGHT,
+  ARENA_WIDTH,
+  type GameEndedPayload,
+  type GameStatePayload,
+  type PlayerInputMessage,
+  type PlayerKeys,
+  type Tank,
 } from "@/lib/types";
 
 type KillEntry = { killer: string; victim: string; points: number };
+
+/** Match server tick (~30Hz); avoid flooding socket.io with 60+ emits/sec from rAF. */
+const INPUT_EMIT_HZ = 30;
 
 const defaultKeys = (): PlayerKeys => ({
   up: false,
@@ -42,10 +47,13 @@ export default function GameRoomPage() {
   const [killFeed, setKillFeed] = useState<KillEntry[]>([]);
 
   const keysRef = useRef<PlayerKeys>(defaultKeys());
-  const shootPulseRef = useRef(false);
+  /** True while primary mouse button held (server uses rising edge on shoot). */
+  const shootHeldRef = useRef(false);
   const aimAngleRef = useRef(0);
   const snapshotRef = useRef<GameStatePayload | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const inputEmitCountRef = useRef(0);
 
   const [socket, setSocket] = useState<Socket | null>(null);
 
@@ -74,10 +82,6 @@ export default function GameRoomPage() {
     const a = address.toLowerCase();
     return snapshot.tanks.find((x) => x.address.toLowerCase() === a) ?? null;
   }, [address, snapshot]);
-
-  useEffect(() => {
-    if (myTank) aimAngleRef.current = myTank.rotation;
-  }, [myTank]);
 
   useEffect(() => {
     if (!socket) return;
@@ -127,15 +131,18 @@ export default function GameRoomPage() {
 
   const updateAimFromEvent = useCallback(
     (clientX: number, clientY: number) => {
-      const rect = wrapRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      const mx = clientX - rect.left;
-      const my = clientY - rect.top;
+      const canvas = canvasRef.current;
+      const rect = canvas?.getBoundingClientRect() ?? wrapRef.current?.getBoundingClientRect();
+      if (!rect?.width || !rect.height) return;
       const addr = address;
       const snap = snapshotRef.current;
       if (!addr || !snap) return;
       const tank = snap.tanks.find((t) => t.address.toLowerCase() === addr.toLowerCase());
       if (!tank) return;
+      const scaleX = ARENA_WIDTH / rect.width;
+      const scaleY = ARENA_HEIGHT / rect.height;
+      const mx = (clientX - rect.left) * scaleX;
+      const my = (clientY - rect.top) * scaleY;
       aimAngleRef.current = Math.atan2(my - tank.y, mx - tank.x);
     },
     [address]
@@ -159,35 +166,43 @@ export default function GameRoomPage() {
       if (k === "a") keys.left = false;
       if (k === "d") keys.right = false;
     };
-    window.addEventListener("keydown", kd);
-    window.addEventListener("keyup", ku);
+    window.addEventListener("keydown", kd, true);
+    window.addEventListener("keyup", ku, true);
     return () => {
-      window.removeEventListener("keydown", kd);
-      window.removeEventListener("keyup", ku);
+      window.removeEventListener("keydown", kd, true);
+      window.removeEventListener("keyup", ku, true);
     };
   }, []);
 
   useEffect(() => {
     if (!joined || !gameId || !socket) return;
 
-    let frame = 0;
-    const tick = () => {
+    const intervalMs = 1000 / INPUT_EMIT_HZ;
+    const id = window.setInterval(() => {
       const snap = snapshotRef.current;
-      if (snap?.gameStatus === "active" && socket.connected) {
-        const shoot = shootPulseRef.current;
-        shootPulseRef.current = false;
-        const keys = { ...keysRef.current, shoot };
-        const msg: PlayerInputMessage = {
-          gameId,
+      if (snap?.gameStatus !== "active" || !socket.connected) return;
+
+      const keys: PlayerKeys = {
+        ...keysRef.current,
+        shoot: shootHeldRef.current,
+      };
+      const msg: PlayerInputMessage = {
+        gameId,
+        keys,
+        aimAngle: aimAngleRef.current,
+      };
+      socket.emit("player-input", msg);
+
+      inputEmitCountRef.current += 1;
+      if (inputEmitCountRef.current % 90 === 0) {
+        console.log("[input] player-input emit (~30Hz sample)", {
           keys,
           aimAngle: aimAngleRef.current,
-        };
-        socket.emit("player-input", msg);
+        });
       }
-      frame = requestAnimationFrame(tick);
-    };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
+    }, intervalMs);
+
+    return () => window.clearInterval(id);
   }, [joined, gameId, socket]);
 
   const handlePointerMove = (e: React.MouseEvent) => {
@@ -195,9 +210,24 @@ export default function GameRoomPage() {
   };
 
   const handlePointerDown = (e: React.MouseEvent) => {
-    shootPulseRef.current = true;
+    if (e.button !== 0) return;
+    (e.currentTarget as HTMLElement).focus();
+    shootHeldRef.current = true;
     updateAimFromEvent(e.clientX, e.clientY);
   };
+
+  const handlePointerUp = (e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    shootHeldRef.current = false;
+  };
+
+  useEffect(() => {
+    const onWinMouseUp = (e: MouseEvent) => {
+      if (e.button === 0) shootHeldRef.current = false;
+    };
+    window.addEventListener("mouseup", onWinMouseUp);
+    return () => window.removeEventListener("mouseup", onWinMouseUp);
+  }, []);
 
   const handleJoin = async () => {
     if (!address) {
@@ -287,12 +317,20 @@ export default function GameRoomPage() {
           <div className="relative">
             <div
               ref={wrapRef}
-              className="relative inline-block cursor-crosshair"
+              tabIndex={0}
+              className="relative inline-block cursor-crosshair outline-none focus-visible:ring-2 focus-visible:ring-[#22ff66]/50"
               onMouseMove={handlePointerMove}
               onMouseDown={handlePointerDown}
+              onMouseUp={handlePointerUp}
               role="presentation"
             >
-              <GameCanvas snapshot={snapshot} myTankId={myTankId} />
+              <GameCanvas
+                snapshot={snapshot}
+                myTankId={myTankId}
+                onCanvasReady={(c) => {
+                  canvasRef.current = c;
+                }}
+              />
               <GameHUD
                 snapshot={snapshot}
                 myTank={myTank}
