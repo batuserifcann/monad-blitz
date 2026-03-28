@@ -8,6 +8,7 @@ import {
   Wallet,
   type ContractTransactionReceipt,
   type InterfaceAbi,
+  type TransactionResponse,
 } from "ethers";
 import type { TxConfirmedPayload } from "../types.js";
 
@@ -80,6 +81,30 @@ export class ContractService {
     };
   }
 
+  private txPayloadFromBroadcast(
+    tx: TransactionResponse,
+    type: TxConfirmedPayload["type"],
+    gameId: string,
+    shotId?: string,
+    shooter?: string
+  ): TxConfirmedPayload {
+    const base: TxConfirmedPayload = {
+      type,
+      txHash: tx.hash,
+      from: tx.from ?? this.wallet.address,
+      to: tx.to ?? this.contractAddress,
+      gameId,
+      timestamp: Date.now(),
+    };
+    if (shotId !== undefined) {
+      base.shotId = shotId;
+    }
+    if (shooter !== undefined) {
+      base.shooter = shooter;
+    }
+    return base;
+  }
+
   async createGame(): Promise<string> {
     return this.queue.enqueue(async () => {
       try {
@@ -128,6 +153,28 @@ export class ContractService {
         );
       } catch (e) {
         console.error("[ContractService] recordKill", e);
+      }
+    });
+  }
+
+  async recordShot(
+    gameId: bigint,
+    shooter: string,
+    shotId: string
+  ): Promise<void> {
+    return this.queue.enqueue(async () => {
+      try {
+        const tx = (await this.contract.recordShot(
+          gameId,
+          shooter
+        )) as TransactionResponse;
+        const gid = gameId.toString();
+        this.emitTxConfirmed(
+          this.roomForGame(gameId),
+          this.txPayloadFromBroadcast(tx, "recordShot", gid, shotId, shooter)
+        );
+      } catch (e) {
+        console.error("[ContractService] recordShot", e);
       }
     });
   }

@@ -75,6 +75,7 @@ export type TxConfirmedType =
   | "createGame"
   | "startGame"
   | "recordKill"
+  | "recordShot"
   | "endGame";
 
 export interface TxConfirmedPayload {
@@ -84,7 +85,23 @@ export interface TxConfirmedPayload {
   to: string;
   gameId: string;
   timestamp: number;
+  shotId?: string;
+  shooter?: string;
 }
+
+/** Lobby tx feed: pending/confirmed shots or other confirmed txs */
+export type TxFeedRow =
+  | {
+      kind: "shot";
+      shotId: string;
+      shooter: string;
+      costWei: string;
+      txHash: string | null;
+      confirmed: boolean;
+      timestamp: number;
+    }
+  | { kind: "chain"; payload: TxConfirmedPayload };
+
 
 export const ARENA_WIDTH = 800;
 export const ARENA_HEIGHT = 600;

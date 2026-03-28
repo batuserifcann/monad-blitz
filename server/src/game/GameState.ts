@@ -47,6 +47,8 @@ const SHOT_COOLDOWN_MS = 200;
 const MIN_ATTACK_POWER = 25;
 const ATTACK_GAIN_ON_HIT = 25;
 const ATTACK_LOSS_ON_MISS = 25;
+/** 0.01 MON in wei — must match contract AMMO_PRICE */
+const AMMO_PRICE_WEI = 10_000_000_000_000_000n;
 
 const SPAWNS: [number, number][] = [
   [120, 300],
@@ -66,6 +68,7 @@ export class GameState {
   private tanks = new Map<string, Tank>();
   private bullets: Bullet[] = [];
   private nextBulletId = 1;
+  private nextShotId = 0;
   private inputs = new Map<string, PlayerInputMessage>();
   private lastShootAt = new Map<string, number>();
   private shootWasDown = new Map<string, boolean>();
@@ -236,9 +239,22 @@ export class GameState {
 
       if (edge) {
         const last = this.lastShootAt.get(id) ?? 0;
-        if (now - last >= SHOT_COOLDOWN_MS && tank.ammo > 0) {
+        if (
+          now - last >= SHOT_COOLDOWN_MS &&
+          tank.ammo > 0 &&
+          BigInt(tank.monBalance) >= AMMO_PRICE_WEI
+        ) {
           this.lastShootAt.set(id, now);
           tank.ammo -= 1;
+          tank.monBalance = (BigInt(tank.monBalance) - AMMO_PRICE_WEI).toString();
+          const shotId = `s-${this.nextShotId++}`;
+          this.io.to(this.room).emit("shot-fired", {
+            gameId: String(this.gameId),
+            shooter: tank.address,
+            cost: AMMO_PRICE_WEI.toString(),
+            shotId,
+          });
+          void this.contractService.recordShot(this.gameId, tank.address, shotId);
 
           const bx = tank.x + Math.cos(ang) * (TANK_RADIUS + BULLET_RADIUS + 2);
           const by = tank.y + Math.sin(ang) * (TANK_RADIUS + BULLET_RADIUS + 2);

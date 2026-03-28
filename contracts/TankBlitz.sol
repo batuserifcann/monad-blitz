@@ -59,6 +59,7 @@ contract TankBlitz {
     event GameCreated(uint256 indexed gameId);
     event PlayerJoined(uint256 indexed gameId, address indexed player);
     event GameStarted(uint256 indexed gameId);
+    event ShotFired(uint256 indexed gameId, address indexed shooter);
     event KillRecorded(
         uint256 indexed gameId,
         address indexed killer,
@@ -118,6 +119,18 @@ contract TankBlitz {
         require(n >= MIN_PLAYERS && n <= MAX_PLAYERS, "Player count");
         g.status = GameStatus.Active;
         emit GameStarted(gameId);
+    }
+
+    function recordShot(uint256 gameId, address shooter) external onlyServer {
+        Game storage g = games[gameId];
+        require(g.initialized, "No game");
+        require(g.status == GameStatus.Active, "Not active");
+        require(g.players[shooter].joined, "Not player");
+        require(g.players[shooter].monBalance >= AMMO_PRICE, "No balance");
+        require(g.players[shooter].ammo > 0, "No ammo");
+        g.players[shooter].monBalance -= AMMO_PRICE;
+        g.players[shooter].ammo -= 1;
+        emit ShotFired(gameId, shooter);
     }
 
     function recordKill(

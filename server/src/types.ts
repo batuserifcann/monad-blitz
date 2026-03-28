@@ -75,6 +75,7 @@ export type TxConfirmedType =
   | "createGame"
   | "startGame"
   | "recordKill"
+  | "recordShot"
   | "endGame";
 
 export interface TxConfirmedPayload {
@@ -84,4 +85,8 @@ export interface TxConfirmedPayload {
   to: string;
   gameId: string;
   timestamp: number;
+  /** Correlates broadcast-only recordShot with shot-fired UI rows. */
+  shotId?: string;
+  /** Player address for recordShot (helps client if pending row was missed). */
+  shooter?: string;
 }

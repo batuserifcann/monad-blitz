@@ -28,6 +28,7 @@ import {
   type PlayerKeys,
   type Tank,
   type TxConfirmedPayload,
+  type TxFeedRow,
 } from "@/lib/types";
 
 type KillEntry = { killer: string; victim: string; monWei: string };
@@ -55,7 +56,7 @@ export default function GameRoomPage() {
   const [snapshot, setSnapshot] = useState<GameStatePayload | null>(null);
   const [ended, setEnded] = useState<GameEndedPayload | null>(null);
   const [killFeed, setKillFeed] = useState<KillEntry[]>([]);
-  const [confirmedTxs, setConfirmedTxs] = useState<TxConfirmedPayload[]>([]);
+  const [txFeedRows, setTxFeedRows] = useState<TxFeedRow[]>([]);
   const [killFlash, setKillFlash] = useState(false);
   const [ammoCount, setAmmoCount] = useState(20);
 
@@ -183,12 +184,75 @@ export default function GameRoomPage() {
 
   useEffect(() => {
     if (!socket || !joined) return;
+
+    const onShotFired = (p: {
+      gameId: string;
+      shooter: string;
+      cost: string;
+      shotId: string;
+    }) => {
+      if (p.gameId !== gameId) return;
+      setTxFeedRows((prev) =>
+        [
+          {
+            kind: "shot" as const,
+            shotId: p.shotId,
+            shooter: p.shooter,
+            costWei: p.cost,
+            txHash: null,
+            confirmed: false,
+            timestamp: Date.now(),
+          },
+          ...prev,
+        ].slice(0, 15)
+      );
+    };
+
     const onTxConfirmed = (payload: TxConfirmedPayload) => {
       if (payload.gameId !== gameId) return;
-      setConfirmedTxs((prev) => [payload, ...prev].slice(0, 10));
+      if (payload.type === "recordShot") {
+        setTxFeedRows((prev) => {
+          if (payload.shotId) {
+            const i = prev.findIndex(
+              (r) => r.kind === "shot" && r.shotId === payload.shotId
+            );
+            if (i >= 0) {
+              const next = [...prev];
+              const row = next[i];
+              if (row?.kind === "shot") {
+                next[i] = {
+                  ...row,
+                  txHash: payload.txHash,
+                  confirmed: true,
+                };
+              }
+              return next;
+            }
+          }
+          return [
+            {
+              kind: "shot" as const,
+              shotId: payload.shotId ?? payload.txHash,
+              shooter: payload.shooter ?? "0x0000000000000000000000000000000000000000",
+              costWei: "10000000000000000",
+              txHash: payload.txHash,
+              confirmed: true,
+              timestamp: payload.timestamp,
+            },
+            ...prev,
+          ].slice(0, 15);
+        });
+        return;
+      }
+      setTxFeedRows((prev) =>
+        [{ kind: "chain" as const, payload }, ...prev].slice(0, 15)
+      );
     };
+
+    socket.on("shot-fired", onShotFired);
     socket.on("tx-confirmed", onTxConfirmed);
     return () => {
+      socket.off("shot-fired", onShotFired);
       socket.off("tx-confirmed", onTxConfirmed);
     };
   }, [socket, joined, gameId]);
@@ -391,7 +455,7 @@ export default function GameRoomPage() {
 
       {joined && (
         <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-          <Lobby snapshot={snapshot} txFeed={<TxFeed entries={confirmedTxs} />} />
+          <Lobby snapshot={snapshot} txFeed={<TxFeed entries={txFeedRows} />} />
           <div className="relative">
             <div
               ref={wrapRef}
