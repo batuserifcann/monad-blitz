@@ -1,3 +1,8 @@
+// BigInt JSON serialization polyfill
+(BigInt.prototype as any).toJSON = function () {
+  return this.toString();
+};
+
 import path from "node:path";
 import cors from "cors";
 import dotenv from "dotenv";

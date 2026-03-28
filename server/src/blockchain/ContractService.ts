@@ -80,7 +80,7 @@ export class ContractService {
     };
   }
 
-  async createGame(): Promise<bigint> {
+  async createGame(): Promise<string> {
     return this.queue.enqueue(async () => {
       try {
         const tx = await this.contract.createGame();
@@ -91,7 +91,7 @@ export class ContractService {
           this.roomForGame(gid),
           this.txPayload(receipt, "createGame", gid)
         );
-        return gameId;
+        return gid;
       } catch (e) {
         console.error("[ContractService] createGame", e);
         throw e;
@@ -167,16 +167,16 @@ export class ContractService {
 
   async getGameInfo(gameId: bigint): Promise<{
     status: number;
-    playerCount: bigint;
-    prizePool: bigint;
-    protocolPoints: bigint;
+    playerCount: string;
+    prizePool: string;
+    protocolPoints: string;
   }> {
     const result = await this.contract.getGameInfo(gameId);
     return {
       status: Number(result[0]),
-      playerCount: result[1],
-      prizePool: result[2],
-      protocolPoints: result[3],
+      playerCount: String(result[1]),
+      prizePool: String(result[2]),
+      protocolPoints: String(result[3]),
     };
   }
 
@@ -184,7 +184,7 @@ export class ContractService {
     gameId: bigint,
     player: string
   ): Promise<{
-    points: bigint;
+    points: string;
     hp: number;
     ammo: number;
     attackPower: number;
@@ -192,7 +192,7 @@ export class ContractService {
   }> {
     const result = await this.contract.getPlayer(gameId, player);
     return {
-      points: result[0],
+      points: String(result[0]),
       hp: Number(result[1]),
       ammo: Number(result[2]),
       attackPower: Number(result[3]),

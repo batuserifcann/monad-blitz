@@ -20,7 +20,7 @@ export class GameManager {
     const key = gameId.toString();
     const room = `game:${key}`;
     const gs = new GameState(
-      gameId,
+      BigInt(gameId),
       this.io,
       this.contractService,
       room,
@@ -36,9 +36,9 @@ export class GameManager {
 
   async getGameInfoForApi(gameId: string): Promise<{
     status: number;
-    playerCount: bigint;
-    prizePool: bigint;
-    protocolPoints: bigint;
+    playerCount: string;
+    prizePool: string;
+    protocolPoints: string;
     playersOnChain: string[];
     serverLobbyPlayers: number;
     serverStatus?: string;
