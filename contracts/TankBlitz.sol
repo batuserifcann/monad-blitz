@@ -192,6 +192,10 @@ contract TankBlitz {
 
         uint256 consumed = totalExpected - winnerPoints;
         uint256 ownerShare = (pool * consumed) / totalExpected;
+        uint256 maxOwnerShare = (pool * 20) / 100;
+        if (ownerShare > maxOwnerShare) {
+            ownerShare = maxOwnerShare;
+        }
         uint256 winnerShare = pool - ownerShare;
 
         g.prizePool = 0;

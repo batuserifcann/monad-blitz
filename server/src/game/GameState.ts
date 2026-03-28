@@ -19,6 +19,8 @@ const ATTACK_GAIN_ON_HIT = 25;
 const ATTACK_LOSS_ON_MISS = 25;
 const AMMO_PACK_COST = 10;
 const AMMO_PACK_SIZE = 10;
+/** Virtual points deducted per shot (off-chain simulation). */
+const SHOT_POINT_COST = 0.5;
 
 const SPAWNS: [number, number][] = [
   [120, 300],
@@ -211,11 +213,11 @@ export class GameState {
             });
             void this.contractService.buyAmmo(this.gameId, tank.address);
           }
-          if (tank.ammo > 0 && tank.points >= 1) {
+          if (tank.ammo > 0 && tank.points >= SHOT_POINT_COST) {
             this.lastShootAt.set(id, now);
             tank.ammo -= 1;
-            tank.points -= 1;
-            this.protocolPoints += 1;
+            tank.points -= SHOT_POINT_COST;
+            this.protocolPoints += SHOT_POINT_COST;
 
             const bx = tank.x + Math.cos(ang) * (TANK_RADIUS + BULLET_RADIUS + 2);
             const by = tank.y + Math.sin(ang) * (TANK_RADIUS + BULLET_RADIUS + 2);
