@@ -8,7 +8,7 @@ contract TankBlitz {
 
     uint256 public constant ENTRY_FEE = 0.1 ether;
     uint256 public constant STARTING_POINTS = 100;
-    uint16 public constant STARTING_HP = 10;
+    uint16 public constant STARTING_HP = 100;
     uint16 public constant STARTING_AMMO = 20;
     /// @dev Stored as 100 for 10.0 (one decimal place of precision).
     uint16 public constant ATTACK_POWER = 100;

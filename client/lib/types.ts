@@ -64,6 +64,21 @@ export interface GameEndedPayload {
   ownerPayout: string;
 }
 
+export type TxConfirmedType =
+  | "createGame"
+  | "startGame"
+  | "recordKill"
+  | "endGame";
+
+export interface TxConfirmedPayload {
+  type: TxConfirmedType;
+  txHash: string;
+  from: string;
+  to: string;
+  gameId: string;
+  timestamp: number;
+}
+
 export const ARENA_WIDTH = 800;
 export const ARENA_HEIGHT = 600;
 export const TANK_RADIUS = 20;

@@ -63,3 +63,18 @@ export interface GameEndedPayload {
   winnerPayout: string;
   ownerPayout: string;
 }
+
+export type TxConfirmedType =
+  | "createGame"
+  | "startGame"
+  | "recordKill"
+  | "endGame";
+
+export interface TxConfirmedPayload {
+  type: TxConfirmedType;
+  txHash: string;
+  from: string;
+  to: string;
+  gameId: string;
+  timestamp: number;
+}

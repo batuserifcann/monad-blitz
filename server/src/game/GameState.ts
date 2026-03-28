@@ -89,7 +89,7 @@ export class GameState {
       x: spawn[0],
       y: spawn[1],
       rotation: 0,
-      hp: 10,
+      hp: 100,
       ammo: 20,
       points: 100,
       attackPower: 100,

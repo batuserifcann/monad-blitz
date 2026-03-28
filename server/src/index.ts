@@ -28,12 +28,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const contractService = new ContractService(rpcUrl, privateKey, contractAddress);
-
 const httpServer = createServer(app);
 const io = new SocketIOServer(httpServer, {
   cors: { origin: "*", methods: ["GET", "POST"] },
 });
+
+const contractService = new ContractService(io, rpcUrl, privateKey, contractAddress);
 
 const gameManager = new GameManager(io, contractService);
 

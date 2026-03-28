@@ -17,7 +17,7 @@ function short(a: string) {
 
 export function GameHUD({ snapshot, myTank, killFeed, centerMessage }: Props) {
   const hp = myTank?.hp ?? 0;
-  const hpMax = 10;
+  const hpMax = 100;
   const hpPct = Math.min(100, Math.max(0, (hp / hpMax) * 100));
 
   return (

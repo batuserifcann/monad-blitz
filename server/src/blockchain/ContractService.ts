@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import type { Server } from "socket.io";
 import {
   Contract,
   JsonRpcProvider,
@@ -8,6 +9,7 @@ import {
   type ContractTransactionReceipt,
   type InterfaceAbi,
 } from "ethers";
+import type { TxConfirmedPayload } from "../types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -38,12 +40,44 @@ export class ContractService {
   readonly contract: Contract;
   readonly wallet: Wallet;
   readonly provider: JsonRpcProvider;
+  private readonly contractAddress: string;
 
-  constructor(rpcUrl: string, privateKey: string, contractAddress: string) {
+  constructor(
+    private readonly io: Server,
+    rpcUrl: string,
+    privateKey: string,
+    contractAddress: string
+  ) {
     this.provider = new JsonRpcProvider(rpcUrl);
     this.wallet = new Wallet(privateKey, this.provider);
     const abi = loadAbi();
+    this.contractAddress = contractAddress;
     this.contract = new Contract(contractAddress, abi, this.wallet);
+  }
+
+  private roomForGame(gameId: bigint | string): string {
+    const id = typeof gameId === "bigint" ? gameId.toString() : gameId;
+    return `game:${id}`;
+  }
+
+  private emitTxConfirmed(room: string, payload: TxConfirmedPayload): void {
+    this.io.to(room).emit("tx-confirmed", payload);
+  }
+
+  private txPayload(
+    receipt: ContractTransactionReceipt,
+    type: TxConfirmedPayload["type"],
+    gameId: string
+  ): TxConfirmedPayload {
+    const hash = receipt.hash;
+    return {
+      type,
+      txHash: hash,
+      from: receipt.from ?? this.wallet.address,
+      to: receipt.to ?? this.contractAddress,
+      gameId,
+      timestamp: Date.now(),
+    };
   }
 
   async createGame(): Promise<bigint> {
@@ -51,7 +85,13 @@ export class ContractService {
       try {
         const tx = await this.contract.createGame();
         const receipt = (await tx.wait()) as ContractTransactionReceipt;
-        return this.parseGameCreated(receipt);
+        const gameId = this.parseGameCreated(receipt);
+        const gid = gameId.toString();
+        this.emitTxConfirmed(
+          this.roomForGame(gid),
+          this.txPayload(receipt, "createGame", gid)
+        );
+        return gameId;
       } catch (e) {
         console.error("[ContractService] createGame", e);
         throw e;
@@ -63,7 +103,12 @@ export class ContractService {
     return this.queue.enqueue(async () => {
       try {
         const tx = await this.contract.startGame(gameId);
-        await tx.wait();
+        const receipt = (await tx.wait()) as ContractTransactionReceipt;
+        const gid = gameId.toString();
+        this.emitTxConfirmed(
+          this.roomForGame(gameId),
+          this.txPayload(receipt, "startGame", gid)
+        );
       } catch (e) {
         console.error("[ContractService] startGame", e);
         throw e;
@@ -75,7 +120,12 @@ export class ContractService {
     return this.queue.enqueue(async () => {
       try {
         const tx = await this.contract.recordKill(gameId, killer, victim);
-        await tx.wait();
+        const receipt = (await tx.wait()) as ContractTransactionReceipt;
+        const gid = gameId.toString();
+        this.emitTxConfirmed(
+          this.roomForGame(gameId),
+          this.txPayload(receipt, "recordKill", gid)
+        );
       } catch (e) {
         console.error("[ContractService] recordKill", e);
       }
@@ -91,6 +141,11 @@ export class ContractService {
       try {
         const tx = await this.contract.endGame(gameId, winner, winnerPoints);
         const receipt = (await tx.wait()) as ContractTransactionReceipt;
+        const gid = gameId.toString();
+        this.emitTxConfirmed(
+          this.roomForGame(gameId),
+          this.txPayload(receipt, "endGame", gid)
+        );
         return this.parseGameEnded(receipt);
       } catch (e) {
         console.error("[ContractService] endGame", e);

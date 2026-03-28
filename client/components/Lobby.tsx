@@ -1,16 +1,19 @@
 "use client";
 
+import type { ReactNode } from "react";
 import type { GameStatePayload } from "@/lib/types";
 
 type Props = {
   snapshot: GameStatePayload | null;
+  /** Shown below the player list (e.g. on-chain tx feed). */
+  txFeed?: ReactNode;
 };
 
 function shortAddr(a: string) {
   return a.length > 10 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a;
 }
 
-export function Lobby({ snapshot }: Props) {
+export function Lobby({ snapshot, txFeed }: Props) {
   if (!snapshot) {
     return (
       <div className="rounded border border-zinc-800 bg-zinc-950/80 p-4 text-zinc-400">
@@ -50,6 +53,7 @@ export function Lobby({ snapshot }: Props) {
       {gameStatus === "ended" && (
         <p className="text-sm text-zinc-400">Match finished.</p>
       )}
+      {txFeed}
     </div>
   );
 }

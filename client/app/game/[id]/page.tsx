@@ -7,6 +7,7 @@ import { GameCanvas } from "@/components/GameCanvas";
 import { GameHUD } from "@/components/GameHUD";
 import { GameOver } from "@/components/GameOver";
 import { Lobby } from "@/components/Lobby";
+import { TxFeed } from "@/components/TxFeed";
 import { WalletConnect } from "@/components/WalletConnect";
 import { registerPlayer } from "@/lib/contract";
 import { disconnectSocket, getSocket } from "@/lib/socket";
@@ -18,6 +19,7 @@ import {
   type PlayerInputMessage,
   type PlayerKeys,
   type Tank,
+  type TxConfirmedPayload,
 } from "@/lib/types";
 
 type KillEntry = { killer: string; victim: string; points: number };
@@ -45,6 +47,7 @@ export default function GameRoomPage() {
   const [snapshot, setSnapshot] = useState<GameStatePayload | null>(null);
   const [ended, setEnded] = useState<GameEndedPayload | null>(null);
   const [killFeed, setKillFeed] = useState<KillEntry[]>([]);
+  const [confirmedTxs, setConfirmedTxs] = useState<TxConfirmedPayload[]>([]);
 
   const keysRef = useRef<PlayerKeys>(defaultKeys());
   /** True while primary mouse button held (server uses rising edge on shoot). */
@@ -128,6 +131,18 @@ export default function GameRoomPage() {
       socket.off("error", onErr);
     };
   }, [socket]);
+
+  useEffect(() => {
+    if (!socket || !joined) return;
+    const onTxConfirmed = (payload: TxConfirmedPayload) => {
+      if (payload.gameId !== gameId) return;
+      setConfirmedTxs((prev) => [payload, ...prev].slice(0, 10));
+    };
+    socket.on("tx-confirmed", onTxConfirmed);
+    return () => {
+      socket.off("tx-confirmed", onTxConfirmed);
+    };
+  }, [socket, joined, gameId]);
 
   const updateAimFromEvent = useCallback(
     (clientX: number, clientY: number) => {
@@ -313,7 +328,7 @@ export default function GameRoomPage() {
 
       {joined && (
         <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
-          <Lobby snapshot={snapshot} />
+          <Lobby snapshot={snapshot} txFeed={<TxFeed entries={confirmedTxs} />} />
           <div className="relative">
             <div
               ref={wrapRef}
