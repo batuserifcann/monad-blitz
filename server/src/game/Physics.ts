@@ -36,4 +36,21 @@ export function inArena(x: number, y: number, width: number, height: number): bo
   return x >= 0 && x <= width && y >= 0 && y <= height;
 }
 
+/** Circle vs axis-aligned rectangle (rect top-left at rx, ry). */
+export function circleRectOverlap(
+  cx: number,
+  cy: number,
+  r: number,
+  rx: number,
+  ry: number,
+  rw: number,
+  rh: number
+): boolean {
+  const closestX = Math.max(rx, Math.min(cx, rx + rw));
+  const closestY = Math.max(ry, Math.min(cy, ry + rh));
+  const dx = cx - closestX;
+  const dy = cy - closestY;
+  return dx * dx + dy * dy <= r * r;
+}
+
 export { TANK_RADIUS, BULLET_RADIUS };

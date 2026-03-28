@@ -1,9 +1,16 @@
 import type { Server } from "socket.io";
-import { BULLET_RADIUS, bulletHitsTank, inArena, TANK_RADIUS } from "./Physics.js";
+import {
+  BULLET_RADIUS,
+  bulletHitsTank,
+  circleRectOverlap,
+  inArena,
+  TANK_RADIUS,
+} from "./Physics.js";
 import type {
   Bullet,
   GameStatePayload,
   GameStatus,
+  Obstacle,
   PlayerInputMessage,
   Tank,
 } from "../types.js";
@@ -11,6 +18,29 @@ import type { ContractService } from "../blockchain/ContractService.js";
 
 export const ARENA_WIDTH = 800;
 export const ARENA_HEIGHT = 600;
+
+export const OBSTACLES: Obstacle[] = [
+  { x: 200, y: 150, w: 60, h: 60 },
+  { x: 500, y: 100, w: 80, h: 40 },
+  { x: 350, y: 300, w: 40, h: 120 },
+  { x: 600, y: 400, w: 60, h: 60 },
+  { x: 150, y: 450, w: 80, h: 40 },
+  { x: 700, y: 250, w: 40, h: 80 },
+];
+
+function tankOverlapsObstacle(cx: number, cy: number): boolean {
+  for (const o of OBSTACLES) {
+    if (circleRectOverlap(cx, cy, TANK_RADIUS, o.x, o.y, o.w, o.h)) return true;
+  }
+  return false;
+}
+
+function bulletOverlapsObstacle(bx: number, by: number): boolean {
+  for (const o of OBSTACLES) {
+    if (circleRectOverlap(bx, by, BULLET_RADIUS, o.x, o.y, o.w, o.h)) return true;
+  }
+  return false;
+}
 const TICK_MS = Math.floor(1000 / 30);
 const BULLET_SPEED = 8;
 const SHOT_COOLDOWN_MS = 200;
@@ -136,6 +166,7 @@ export class GameState {
     return {
       tanks: [...this.tanks.values()],
       bullets: this.bullets,
+      obstacles: OBSTACLES,
       gameStatus: this.gameStatus,
       countdownSeconds,
     };
@@ -185,11 +216,18 @@ export class GameState {
       const sx = Math.cos(ang - Math.PI / 2) * tank.speed * strafe;
       const sy = Math.sin(ang - Math.PI / 2) * tank.speed * strafe;
 
+      const prevX = tank.x;
+      const prevY = tank.y;
       tank.x += fx + sx;
       tank.y += fy + sy;
 
       tank.x = Math.max(TANK_RADIUS, Math.min(ARENA_WIDTH - TANK_RADIUS, tank.x));
       tank.y = Math.max(TANK_RADIUS, Math.min(ARENA_HEIGHT - TANK_RADIUS, tank.y));
+
+      if (tankOverlapsObstacle(tank.x, tank.y)) {
+        tank.x = prevX;
+        tank.y = prevY;
+      }
 
       const wasDown = this.shootWasDown.get(id) ?? false;
       const down = keys.shoot;
@@ -229,6 +267,10 @@ export class GameState {
 
       const owner = this.tanks.get(bullet.ownerId);
       if (!owner) continue;
+
+      if (bulletOverlapsObstacle(bullet.x, bullet.y)) {
+        continue;
+      }
 
       let hit: Tank | null = null;
       for (const tank of this.tanks.values()) {

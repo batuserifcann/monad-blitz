@@ -11,6 +11,11 @@ const HP_BAR_W = 40;
 const HP_BAR_H = 4;
 const HP_BG = 0x2a2a2a;
 
+/* obstacles — crate / bunker */
+const OB_FILL = 0x1a1d1a;
+const OB_EDGE = 0x2a3228;
+const OB_PANEL = 0x3d4a3a;
+
 /* ── helpers ──────────────────────────────────────────────────────── */
 function truncateAddress(addr: string): string {
   if (addr.length < 12) return addr;
@@ -102,6 +107,30 @@ export class TankScene extends Phaser.Scene {
       }
     }
     this.prevGameOverState = gameOver ?? null;
+
+    /* ── obstacles (behind tanks) ── */
+    const obstacles = snap.obstacles ?? [];
+    for (const o of obstacles) {
+      this.g.fillStyle(OB_FILL, 1);
+      this.g.fillRect(o.x, o.y, o.w, o.h);
+      this.g.lineStyle(1.5, OB_EDGE, 0.95);
+      this.g.strokeRect(o.x, o.y, o.w, o.h);
+      this.g.lineStyle(1, OB_PANEL, 0.55);
+      const inset = 3;
+      this.g.strokeRect(o.x + inset, o.y + inset, o.w - inset * 2, o.h - inset * 2);
+      this.g.beginPath();
+      this.g.moveTo(o.x + inset, o.y + o.h * 0.35);
+      this.g.lineTo(o.x + o.w - inset, o.y + o.h * 0.35);
+      this.g.moveTo(o.x + inset, o.y + o.h * 0.65);
+      this.g.lineTo(o.x + o.w - inset, o.y + o.h * 0.65);
+      this.g.strokePath();
+      this.g.beginPath();
+      this.g.moveTo(o.x + o.w * 0.35, o.y + inset);
+      this.g.lineTo(o.x + o.w * 0.35, o.y + o.h - inset);
+      this.g.moveTo(o.x + o.w * 0.65, o.y + inset);
+      this.g.lineTo(o.x + o.w * 0.65, o.y + o.h - inset);
+      this.g.strokePath();
+    }
 
     /* ── draw tanks ── */
     const seen = new Set<string>();

@@ -93,6 +93,35 @@ export default function Home() {
         </div>
         {err && <p className="text-sm text-red-400">{err}</p>}
       </section>
+
+      <section className="space-y-4">
+        <h2 className="text-xs font-semibold uppercase tracking-[0.35em] text-[#22ff66]/90">
+          How to play
+        </h2>
+        <ul className="grid gap-3 sm:grid-cols-2">
+          <li className="rounded border border-zinc-800/90 bg-black/70 px-4 py-3 font-mono text-[13px] leading-relaxed text-[#22ff66] shadow-[inset_0_0_0_1px_rgba(34,255,102,0.08)]">
+            Choose your ammo (10–50 bullets); each bullet costs 0.01 MON.
+          </li>
+          <li className="rounded border border-zinc-800/90 bg-black/70 px-4 py-3 font-mono text-[13px] leading-relaxed text-[#22ff66] shadow-[inset_0_0_0_1px_rgba(34,255,102,0.08)]">
+            WASD to move, mouse to aim, click to shoot.
+          </li>
+          <li className="rounded border border-zinc-800/90 bg-black/70 px-4 py-3 font-mono text-[13px] leading-relaxed text-[#22ff66] shadow-[inset_0_0_0_1px_rgba(34,255,102,0.08)]">
+            Hit an enemy: deal damage and your attack power increases.
+          </li>
+          <li className="rounded border border-zinc-800/90 bg-black/70 px-4 py-3 font-mono text-[13px] leading-relaxed text-[#22ff66] shadow-[inset_0_0_0_1px_rgba(34,255,102,0.08)]">
+            Miss: your attack power decreases.
+          </li>
+          <li className="rounded border border-zinc-800/90 bg-black/70 px-4 py-3 font-mono text-[13px] leading-relaxed text-[#22ff66] shadow-[inset_0_0_0_1px_rgba(34,255,102,0.08)]">
+            Kill an enemy: steal all their remaining MON.
+          </li>
+          <li className="rounded border border-zinc-800/90 bg-black/70 px-4 py-3 font-mono text-[13px] leading-relaxed text-[#22ff66] shadow-[inset_0_0_0_1px_rgba(34,255,102,0.08)]">
+            Last tank standing wins 95% of the prize pool.
+          </li>
+          <li className="sm:col-span-2 rounded border border-zinc-800/90 bg-black/70 px-4 py-3 font-mono text-[13px] leading-relaxed text-[#22ff66] shadow-[inset_0_0_0_1px_rgba(34,255,102,0.08)]">
+            All kills and payouts are recorded on the Monad blockchain.
+          </li>
+        </ul>
+      </section>
     </main>
   );
 }

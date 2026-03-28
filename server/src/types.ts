@@ -25,6 +25,13 @@ export interface Bullet {
   age: number;
 }
 
+export interface Obstacle {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface PlayerKeys {
   up: boolean;
   down: boolean;
@@ -47,6 +54,7 @@ export interface JoinGameMessage {
 export interface GameStatePayload {
   tanks: Tank[];
   bullets: Bullet[];
+  obstacles: Obstacle[];
   gameStatus: GameStatus;
   countdownSeconds?: number;
 }
