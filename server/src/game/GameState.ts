@@ -17,6 +17,8 @@ const SHOT_COOLDOWN_MS = 200;
 const MIN_ATTACK_POWER = 25;
 const ATTACK_GAIN_ON_HIT = 25;
 const ATTACK_LOSS_ON_MISS = 25;
+const AMMO_PACK_COST = 10;
+const AMMO_PACK_SIZE = 10;
 
 const SPAWNS: [number, number][] = [
   [120, 300],
@@ -194,29 +196,45 @@ export class GameState {
       const edge = down && !wasDown;
       this.shootWasDown.set(id, down);
 
-      if (edge && tank.ammo > 0 && tank.points >= 1) {
+      if (edge) {
         const last = this.lastShootAt.get(id) ?? 0;
         if (now - last >= SHOT_COOLDOWN_MS) {
-          this.lastShootAt.set(id, now);
-          tank.ammo -= 1;
-          tank.points -= 1;
-          this.protocolPoints += 1;
+          let boughtAmmo = false;
+          if (tank.ammo === 0 && tank.points >= AMMO_PACK_COST) {
+            tank.points -= AMMO_PACK_COST;
+            tank.ammo += AMMO_PACK_SIZE;
+            boughtAmmo = true;
+            this.io.to(this.room).emit("ammo-purchased", {
+              gameId: this.gameId.toString(),
+              playerAddress: tank.address,
+              remainingPoints: tank.points,
+            });
+            void this.contractService.buyAmmo(this.gameId, tank.address);
+          }
+          if (tank.ammo > 0 && tank.points >= 1) {
+            this.lastShootAt.set(id, now);
+            tank.ammo -= 1;
+            tank.points -= 1;
+            this.protocolPoints += 1;
 
-          const bx = tank.x + Math.cos(ang) * (TANK_RADIUS + BULLET_RADIUS + 2);
-          const by = tank.y + Math.sin(ang) * (TANK_RADIUS + BULLET_RADIUS + 2);
-          const dx = Math.cos(ang) * BULLET_SPEED;
-          const dy = Math.sin(ang) * BULLET_SPEED;
+            const bx = tank.x + Math.cos(ang) * (TANK_RADIUS + BULLET_RADIUS + 2);
+            const by = tank.y + Math.sin(ang) * (TANK_RADIUS + BULLET_RADIUS + 2);
+            const dx = Math.cos(ang) * BULLET_SPEED;
+            const dy = Math.sin(ang) * BULLET_SPEED;
 
-          this.bullets.push({
-            id: `b-${this.nextBulletId++}`,
-            ownerId: id,
-            x: bx,
-            y: by,
-            dx,
-            dy,
-            speed: BULLET_SPEED,
-            age: 0,
-          });
+            this.bullets.push({
+              id: `b-${this.nextBulletId++}`,
+              ownerId: id,
+              x: bx,
+              y: by,
+              dx,
+              dy,
+              speed: BULLET_SPEED,
+              age: 0,
+            });
+          } else if (boughtAmmo) {
+            this.lastShootAt.set(id, now);
+          }
         }
       }
     }

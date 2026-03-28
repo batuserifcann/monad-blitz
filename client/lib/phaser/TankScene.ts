@@ -4,15 +4,25 @@ import { BULLET_RADIUS, TANK_RADIUS } from "../types";
 
 const TANK_COLORS = [0x22ff66, 0xff3344, 0x4488ff, 0xffdd22, 0xaa44ff];
 const DEAD_ALPHA = 0.35;
+const HP_BAR_W = 40;
+const HP_BAR_H = 4;
+const HP_BG = 0x2a2a2a;
 
 function truncateAddress(addr: string): string {
   if (addr.length < 12) return addr;
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
+function hpBarFg(hp: number): number {
+  if (hp > 50) return 0x22ff66;
+  if (hp > 25) return 0xffdd22;
+  return 0xff3344;
+}
+
 export class TankScene extends Phaser.Scene {
   private g!: Phaser.GameObjects.Graphics;
   private labels = new Map<string, Phaser.GameObjects.Text>();
+  private pointLabels = new Map<string, Phaser.GameObjects.Text>();
   private bg!: Phaser.GameObjects.Rectangle;
 
   constructor() {
@@ -44,6 +54,8 @@ export class TankScene extends Phaser.Scene {
     if (!snap) {
       for (const t of this.labels.values()) t.destroy();
       this.labels.clear();
+      for (const t of this.pointLabels.values()) t.destroy();
+      this.pointLabels.clear();
       return;
     }
 
@@ -75,6 +87,15 @@ export class TankScene extends Phaser.Scene {
       this.g.lineTo(tx, ty);
       this.g.strokePath();
 
+      const barTop = cy - half - 34;
+      const barLeft = cx - HP_BAR_W / 2;
+      this.g.fillStyle(HP_BG, alpha);
+      this.g.fillRect(barLeft, barTop, HP_BAR_W, HP_BAR_H);
+      const hpFrac = Math.max(0, Math.min(1, tank.hp / 100));
+      const fg = tank.alive ? hpBarFg(tank.hp) : 0x555555;
+      this.g.fillStyle(fg, alpha);
+      this.g.fillRect(barLeft, barTop, HP_BAR_W * hpFrac, HP_BAR_H);
+
       let text = this.labels.get(tank.id);
       if (!text) {
         text = this.add.text(0, 0, "", {
@@ -86,14 +107,33 @@ export class TankScene extends Phaser.Scene {
         this.labels.set(tank.id, text);
       }
       text.setText(truncateAddress(tank.address));
-      text.setPosition(cx, cy - half - 14);
+      text.setPosition(cx, cy - half - 22);
       text.setStyle({ color: tank.alive ? "#ccffcc" : "#888888" });
+      let pts = this.pointLabels.get(tank.id);
+      if (!pts) {
+        pts = this.add.text(0, 0, "", {
+          fontSize: "9px",
+          color: "#99aa99",
+          fontFamily: "ui-monospace, monospace",
+        });
+        pts.setOrigin(0.5, 1);
+        this.pointLabels.set(tank.id, pts);
+      }
+      pts.setText(`${tank.points} pts`);
+      pts.setPosition(cx, cy - half - 8);
+      pts.setStyle({ color: tank.alive ? "#88cc88" : "#666666" });
     });
 
     for (const [id, text] of this.labels) {
       if (!seen.has(id)) {
         text.destroy();
         this.labels.delete(id);
+      }
+    }
+    for (const [id, text] of this.pointLabels) {
+      if (!seen.has(id)) {
+        text.destroy();
+        this.pointLabels.delete(id);
       }
     }
 
