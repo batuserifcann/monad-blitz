@@ -12,10 +12,7 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 function loadAbi(): InterfaceAbi {
-  const artifactPath = path.resolve(
-    __dirname,
-    "../../../artifacts/contracts/TankBlitz.sol/TankBlitz.json"
-  );
+  const artifactPath = path.join(__dirname, "abi", "TankBlitz.json");
   const raw = fs.readFileSync(artifactPath, "utf8");
   const parsed = JSON.parse(raw) as { abi: InterfaceAbi };
   return parsed.abi;

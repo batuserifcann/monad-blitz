@@ -6,7 +6,8 @@
   "scripts": {
     "compile": "hardhat compile",
     "deploy:monad": "hardhat run scripts/deploy.ts --network monadTestnet",
-    "dev:server": "cd server && npm run dev"
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev"
   },
   "repository": {
     "type": "git",

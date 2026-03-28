@@ -1,5 +1,4 @@
-import * as path from "node:path";
-import { fileURLToPath } from "node:url";
+import path from "node:path";
 import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
@@ -8,8 +7,11 @@ import { Server as SocketIOServer } from "socket.io";
 import { ContractService } from "./blockchain/ContractService.js";
 import { GameManager } from "./game/GameManager.js";
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.resolve(__dirname, "../../.env") });
+const envPath = path.resolve(process.cwd(), ".env");
+const loaded = dotenv.config({ path: envPath });
+if (loaded.error) {
+  dotenv.config();
+}
 
 const PORT = Number(process.env.PORT ?? 3001);
 const rpcUrl =

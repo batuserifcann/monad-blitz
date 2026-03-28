@@ -1,4 +1,27 @@
+# Dependencies
 node_modules/
+
+# Env and secrets
 .env
+.env.*
+!.env.example
+
+# Hardhat
 artifacts/
 cache/
+
+# Server build
+server/dist/
+
+# Client (Next.js)
+client/.next/
+client/out/
+client/build/
+
+# Logs and OS
+*.log
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
