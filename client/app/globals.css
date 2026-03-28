@@ -28,3 +28,18 @@ body {
     transform: translateY(0);
   }
 }
+
+@keyframes shot-flash-green {
+  0% {
+    background-color: rgba(34, 255, 102, 0.2);
+    border-color: rgba(34, 255, 102, 0.65);
+    box-shadow:
+      inset 0 0 12px rgba(34, 255, 102, 0.25),
+      0 0 16px rgba(34, 255, 102, 0.35);
+  }
+  100% {
+    background-color: rgba(9, 9, 11, 0.92);
+    border-color: rgba(39, 39, 42, 0.9);
+    box-shadow: none;
+  }
+}

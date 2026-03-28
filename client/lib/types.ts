@@ -96,8 +96,6 @@ export type TxFeedRow =
       shotId: string;
       shooter: string;
       costWei: string;
-      txHash: string | null;
-      confirmed: boolean;
       timestamp: number;
     }
   | { kind: "chain"; payload: TxConfirmedPayload };

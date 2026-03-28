@@ -254,7 +254,6 @@ export class GameState {
             cost: AMMO_PRICE_WEI.toString(),
             shotId,
           });
-          void this.contractService.recordShot(this.gameId, tank.address, shotId);
 
           const bx = tank.x + Math.cos(ang) * (TANK_RADIUS + BULLET_RADIUS + 2);
           const by = tank.y + Math.sin(ang) * (TANK_RADIUS + BULLET_RADIUS + 2);

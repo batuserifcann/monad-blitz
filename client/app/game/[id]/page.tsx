@@ -199,8 +199,6 @@ export default function GameRoomPage() {
             shotId: p.shotId,
             shooter: p.shooter,
             costWei: p.cost,
-            txHash: null,
-            confirmed: false,
             timestamp: Date.now(),
           },
           ...prev,
@@ -210,40 +208,7 @@ export default function GameRoomPage() {
 
     const onTxConfirmed = (payload: TxConfirmedPayload) => {
       if (payload.gameId !== gameId) return;
-      if (payload.type === "recordShot") {
-        setTxFeedRows((prev) => {
-          if (payload.shotId) {
-            const i = prev.findIndex(
-              (r) => r.kind === "shot" && r.shotId === payload.shotId
-            );
-            if (i >= 0) {
-              const next = [...prev];
-              const row = next[i];
-              if (row?.kind === "shot") {
-                next[i] = {
-                  ...row,
-                  txHash: payload.txHash,
-                  confirmed: true,
-                };
-              }
-              return next;
-            }
-          }
-          return [
-            {
-              kind: "shot" as const,
-              shotId: payload.shotId ?? payload.txHash,
-              shooter: payload.shooter ?? "0x0000000000000000000000000000000000000000",
-              costWei: "10000000000000000",
-              txHash: payload.txHash,
-              confirmed: true,
-              timestamp: payload.timestamp,
-            },
-            ...prev,
-          ].slice(0, 15);
-        });
-        return;
-      }
+      if (payload.type === "recordShot") return;
       setTxFeedRows((prev) =>
         [{ kind: "chain" as const, payload }, ...prev].slice(0, 15)
       );
