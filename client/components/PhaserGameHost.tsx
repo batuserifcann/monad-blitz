@@ -52,6 +52,7 @@ export function PhaserGameHost({ snapshot, myTankId, onCanvasReady }: Props) {
       gameRef.current = null;
       gameViewBridge.snapshot = null;
       gameViewBridge.myTankId = null;
+      gameViewBridge.gameOverState = null;
     };
   }, []);
 

@@ -11,6 +11,14 @@ import { TxFeed } from "@/components/TxFeed";
 import { WalletConnect } from "@/components/WalletConnect";
 import { registerPlayer } from "@/lib/contract";
 import { disconnectSocket, getSocket } from "@/lib/socket";
+import { gameViewBridge } from "@/lib/phaser/bridge";
+import {
+  playShoot,
+  playHit,
+  playKill,
+  playGameStart,
+  playVictory,
+} from "@/lib/audio";
 import {
   ARENA_HEIGHT,
   ARENA_WIDTH,
@@ -48,6 +56,7 @@ export default function GameRoomPage() {
   const [ended, setEnded] = useState<GameEndedPayload | null>(null);
   const [killFeed, setKillFeed] = useState<KillEntry[]>([]);
   const [confirmedTxs, setConfirmedTxs] = useState<TxConfirmedPayload[]>([]);
+  const [killFlash, setKillFlash] = useState(false);
 
   const keysRef = useRef<PlayerKeys>(defaultKeys());
   /** True while primary mouse button held (server uses rising edge on shoot). */
@@ -57,6 +66,8 @@ export default function GameRoomPage() {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const inputEmitCountRef = useRef(0);
+  const prevAmmoRef = useRef<number | null>(null);
+  const prevStatusRef = useRef<string | null>(null);
 
   const [socket, setSocket] = useState<Socket | null>(null);
 
@@ -72,6 +83,27 @@ export default function GameRoomPage() {
   useEffect(() => {
     snapshotRef.current = snapshot;
   }, [snapshot]);
+
+  /* ── sound triggers on snapshot changes ── */
+  useEffect(() => {
+    if (!snapshot || !address) return;
+
+    /* shoot sound: own ammo decreased */
+    const addr = address.toLowerCase();
+    const me = snapshot.tanks.find((t) => t.address.toLowerCase() === addr);
+    if (me) {
+      if (prevAmmoRef.current !== null && me.ammo < prevAmmoRef.current) {
+        playShoot();
+      }
+      prevAmmoRef.current = me.ammo;
+    }
+
+    /* game start sound: status transitions to active */
+    if (snapshot.gameStatus === "active" && prevStatusRef.current !== "active") {
+      playGameStart();
+    }
+    prevStatusRef.current = snapshot.gameStatus;
+  }, [snapshot, address]);
 
   const myTankId = useMemo(() => {
     if (!address || !snapshot) return null;
@@ -105,10 +137,26 @@ export default function GameRoomPage() {
         ];
         return next.slice(0, 5);
       });
+
+      /* kill flash */
+      setKillFlash(true);
+      setTimeout(() => setKillFlash(false), 400);
+
+      /* sound: kill vs hit */
+      const addr = address?.toLowerCase();
+      if (addr && payload.killer.toLowerCase() === addr) {
+        playKill();
+      } else if (addr && payload.victim.toLowerCase() === addr) {
+        playHit();
+      }
     };
 
     const onEnded = (p: GameEndedPayload) => {
       setEnded(p);
+      const addr = address?.toLowerCase();
+      const won = addr && p.winner.toLowerCase() === addr;
+      gameViewBridge.gameOverState = won ? "win" : "lose";
+      if (won) playVictory();
     };
 
     const onState = (s: GameStatePayload) => {
@@ -130,7 +178,7 @@ export default function GameRoomPage() {
       socket.off("game-ended", onEnded);
       socket.off("error", onErr);
     };
-  }, [socket]);
+  }, [socket, address]);
 
   useEffect(() => {
     if (!socket || !joined) return;
@@ -351,6 +399,7 @@ export default function GameRoomPage() {
                 myTank={myTank}
                 killFeed={killFeed}
                 centerMessage={centerMessage}
+                killFlash={killFlash}
               />
             </div>
             <p className="mt-2 text-xs text-zinc-500">

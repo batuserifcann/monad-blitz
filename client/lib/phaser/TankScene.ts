@@ -2,12 +2,15 @@ import Phaser from "phaser";
 import { gameViewBridge } from "./bridge";
 import { BULLET_RADIUS, TANK_RADIUS } from "../types";
 
+/* ── colour palette ──────────────────────────────────────────────── */
 const TANK_COLORS = [0x22ff66, 0xff3344, 0x4488ff, 0xffdd22, 0xaa44ff];
+const TANK_BODY_SHADES = [0x18b84a, 0xcc2233, 0x3366cc, 0xccaa11, 0x8833cc]; // darker
 const DEAD_ALPHA = 0.35;
 const HP_BAR_W = 40;
 const HP_BAR_H = 4;
 const HP_BG = 0x2a2a2a;
 
+/* ── helpers ──────────────────────────────────────────────────────── */
 function truncateAddress(addr: string): string {
   if (addr.length < 12) return addr;
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
@@ -19,24 +22,50 @@ function hpBarFg(hp: number): number {
   return 0xff3344;
 }
 
+function colorToStr(c: number): string {
+  return "#" + c.toString(16).padStart(6, "0");
+}
+
+/* ── confetti particle ───────────────────────────────────────────── */
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  color: number;
+  size: number;
+  life: number;
+  maxLife: number;
+  rotation: number;
+  rotSpeed: number;
+}
+
 export class TankScene extends Phaser.Scene {
   private g!: Phaser.GameObjects.Graphics;
   private labels = new Map<string, Phaser.GameObjects.Text>();
   private pointLabels = new Map<string, Phaser.GameObjects.Text>();
   private bg!: Phaser.GameObjects.Rectangle;
 
+  /* bullet trail history: bulletId → last N positions */
+  private bulletTrails = new Map<string, { x: number; y: number }[]>();
+  private static readonly TRAIL_LEN = 4;
+
+  /* game-over particles / effects */
+  private confetti: Particle[] = [];
+  private shakeTimer = 0;
+  private redFlashAlpha = 0;
+  private prevGameOverState: string | null = null;
+  private glowPulse = 0;
+
   constructor() {
     super({ key: "TankScene" });
   }
 
   create(): void {
-    // Input is handled by the DOM (page.tsx); Phaser must not capture keys/pointer.
     const kb = this.input.keyboard;
     if (kb) kb.enabled = false;
     const canvas = this.game.canvas;
-    if (canvas) {
-      canvas.style.pointerEvents = "none";
-    }
+    if (canvas) canvas.style.pointerEvents = "none";
 
     this.g = this.add.graphics();
     this.bg = this.add
@@ -46,10 +75,14 @@ export class TankScene extends Phaser.Scene {
     this.bg.setDepth(-1);
   }
 
-  update(): void {
+  /* ── main render loop ────────────────────────────────────────── */
+  update(_time: number, delta: number): void {
     const snap = gameViewBridge.snapshot;
     const myId = gameViewBridge.myTankId;
+    const gameOver = gameViewBridge.gameOverState;
     this.g.clear();
+
+    this.glowPulse = (this.glowPulse + delta * 0.003) % (Math.PI * 2);
 
     if (!snap) {
       for (const t of this.labels.values()) t.destroy();
@@ -59,35 +92,97 @@ export class TankScene extends Phaser.Scene {
       return;
     }
 
+    /* ── game-over effects trigger ── */
+    if (gameOver && gameOver !== this.prevGameOverState) {
+      if (gameOver === "win") this.spawnConfetti();
+      if (gameOver === "lose") {
+        this.shakeTimer = 500; // ms
+        this.redFlashAlpha = 0.35;
+      }
+    }
+    this.prevGameOverState = gameOver ?? null;
+
+    /* ── draw tanks ── */
     const seen = new Set<string>();
     snap.tanks.forEach((tank, index) => {
       seen.add(tank.id);
       const color = TANK_COLORS[index % TANK_COLORS.length]!;
-      const bodyColor = tank.alive ? color : 0x666666;
+      const bodyShade = TANK_BODY_SHADES[index % TANK_BODY_SHADES.length]!;
+      const bodyColor = tank.alive ? color : 0x555555;
+      const rimColor = tank.alive ? bodyShade : 0x444444;
       const alpha = tank.alive ? 1 : DEAD_ALPHA;
       const cx = tank.x;
       const cy = tank.y;
-      const half = TANK_RADIUS;
+      const r = TANK_RADIUS;
+      const ang = tank.rotation;
 
-      this.g.fillStyle(bodyColor, alpha);
-      this.g.fillRect(cx - half, cy - half, half * 2, half * 2);
-
+      /* glow for current player */
       if (tank.alive && tank.id === myId) {
-        this.g.lineStyle(3, 0xffffff, 1);
-        this.g.strokeRect(cx - half - 2, cy - half - 2, half * 2 + 4, half * 2 + 4);
+        const glowAlpha = 0.08 + Math.sin(this.glowPulse) * 0.04;
+        for (let ring = 3; ring >= 1; ring--) {
+          this.g.fillStyle(color, glowAlpha);
+          this.g.fillCircle(cx, cy, r + ring * 6);
+        }
       }
 
-      const ang = tank.rotation;
-      const len = TANK_RADIUS + 12;
-      const tx = cx + Math.cos(ang) * len;
-      const ty = cy + Math.sin(ang) * len;
-      this.g.lineStyle(3, tank.alive ? 0xffffff : 0x888888, alpha);
-      this.g.beginPath();
-      this.g.moveTo(cx, cy);
-      this.g.lineTo(tx, ty);
-      this.g.strokePath();
+      /* tracks (two dark strips) */
+      const trackW = 5;
+      const trackH = r * 1.8;
+      const cos = Math.cos(ang);
+      const sin = Math.sin(ang);
+      const perpX = -sin;
+      const perpY = cos;
+      const trackOffset = r * 0.85;
+      this.g.fillStyle(0x1a1a1a, alpha);
+      for (const side of [-1, 1]) {
+        const ox = cx + perpX * trackOffset * side;
+        const oy = cy + perpY * trackOffset * side;
+        this.g.save();
+        this.g.fillRect(ox - trackW / 2, oy - trackH / 2, trackW, trackH);
+        this.g.restore();
+      }
 
-      const barTop = cy - half - 34;
+      /* body (rounded rect via filled circle + rect) */
+      this.g.fillStyle(bodyColor, alpha);
+      this.g.fillRoundedRect(cx - r, cy - r * 0.7, r * 2, r * 1.4, 5);
+      this.g.lineStyle(1.5, rimColor, alpha);
+      this.g.strokeRoundedRect(cx - r, cy - r * 0.7, r * 2, r * 1.4, 5);
+
+      /* turret base (small circle) */
+      const turretBaseR = 7;
+      this.g.fillStyle(tank.alive ? 0xdddddd : 0x777777, alpha);
+      this.g.fillCircle(cx, cy, turretBaseR);
+      this.g.lineStyle(1, rimColor, alpha);
+      this.g.strokeCircle(cx, cy, turretBaseR);
+
+      /* turret barrel (longer line) */
+      const barrelLen = r + 16;
+      const bx = cx + Math.cos(ang) * barrelLen;
+      const by = cy + Math.sin(ang) * barrelLen;
+      this.g.lineStyle(4, tank.alive ? 0xdddddd : 0x888888, alpha);
+      this.g.beginPath();
+      this.g.moveTo(cx + Math.cos(ang) * turretBaseR, cy + Math.sin(ang) * turretBaseR);
+      this.g.lineTo(bx, by);
+      this.g.strokePath();
+      /* barrel tip */
+      this.g.fillStyle(tank.alive ? 0xffffff : 0x999999, alpha);
+      this.g.fillCircle(bx, by, 2.5);
+
+      /* dead "X" overlay */
+      if (!tank.alive) {
+        this.g.lineStyle(3, 0xff3344, 0.7);
+        this.g.beginPath();
+        this.g.moveTo(cx - r * 0.5, cy - r * 0.5);
+        this.g.lineTo(cx + r * 0.5, cy + r * 0.5);
+        this.g.strokePath();
+        this.g.beginPath();
+        this.g.moveTo(cx + r * 0.5, cy - r * 0.5);
+        this.g.lineTo(cx - r * 0.5, cy + r * 0.5);
+        this.g.strokePath();
+      }
+
+      /* HP bar */
+      const barTop = cy - r - 34;
       const barLeft = cx - HP_BAR_W / 2;
       this.g.fillStyle(HP_BG, alpha);
       this.g.fillRect(barLeft, barTop, HP_BAR_W, HP_BAR_H);
@@ -96,6 +191,7 @@ export class TankScene extends Phaser.Scene {
       this.g.fillStyle(fg, alpha);
       this.g.fillRect(barLeft, barTop, HP_BAR_W * hpFrac, HP_BAR_H);
 
+      /* address label */
       let text = this.labels.get(tank.id);
       if (!text) {
         text = this.add.text(0, 0, "", {
@@ -107,8 +203,10 @@ export class TankScene extends Phaser.Scene {
         this.labels.set(tank.id, text);
       }
       text.setText(truncateAddress(tank.address));
-      text.setPosition(cx, cy - half - 22);
+      text.setPosition(cx, cy - r - 22);
       text.setStyle({ color: tank.alive ? "#ccffcc" : "#888888" });
+
+      /* points label */
       let pts = this.pointLabels.get(tank.id);
       if (!pts) {
         pts = this.add.text(0, 0, "", {
@@ -120,26 +218,109 @@ export class TankScene extends Phaser.Scene {
         this.pointLabels.set(tank.id, pts);
       }
       pts.setText(`${tank.points} pts`);
-      pts.setPosition(cx, cy - half - 8);
+      pts.setPosition(cx, cy - r - 8);
       pts.setStyle({ color: tank.alive ? "#88cc88" : "#666666" });
     });
 
+    /* cleanup stale labels */
     for (const [id, text] of this.labels) {
-      if (!seen.has(id)) {
-        text.destroy();
-        this.labels.delete(id);
-      }
+      if (!seen.has(id)) { text.destroy(); this.labels.delete(id); }
     }
     for (const [id, text] of this.pointLabels) {
-      if (!seen.has(id)) {
-        text.destroy();
-        this.pointLabels.delete(id);
-      }
+      if (!seen.has(id)) { text.destroy(); this.pointLabels.delete(id); }
     }
 
+    /* ── bullet trails + bullets ── */
+    const activeBullets = new Set<string>();
     snap.bullets.forEach((b) => {
+      activeBullets.add(b.id);
+
+      /* store trail */
+      let trail = this.bulletTrails.get(b.id);
+      if (!trail) { trail = []; this.bulletTrails.set(b.id, trail); }
+      trail.push({ x: b.x, y: b.y });
+      if (trail.length > TankScene.TRAIL_LEN) trail.shift();
+
+      /* find shooter color */
+      let bulletColor = 0xffee88;
+      const ownerIdx = snap.tanks.findIndex((t) => t.id === b.ownerId);
+      if (ownerIdx >= 0) bulletColor = TANK_COLORS[ownerIdx % TANK_COLORS.length]!;
+
+      /* draw trail (oldest→newest, fading) */
+      for (let i = 0; i < trail.length - 1; i++) {
+        const pt = trail[i]!;
+        const frac = (i + 1) / trail.length;
+        this.g.fillStyle(bulletColor, frac * 0.35);
+        this.g.fillCircle(pt.x, pt.y, BULLET_RADIUS * frac);
+      }
+
+      /* main bullet */
       this.g.fillStyle(0xffee88, 1);
       this.g.fillCircle(b.x, b.y, BULLET_RADIUS);
+      /* bullet glow */
+      this.g.fillStyle(0xffee88, 0.15);
+      this.g.fillCircle(b.x, b.y, BULLET_RADIUS * 2);
     });
+
+    /* prune trails for disappeared bullets */
+    for (const id of this.bulletTrails.keys()) {
+      if (!activeBullets.has(id)) this.bulletTrails.delete(id);
+    }
+
+    /* ── confetti ── */
+    this.updateConfetti(delta);
+
+    /* ── screen shake ── */
+    if (this.shakeTimer > 0) {
+      this.shakeTimer -= delta;
+      const intensity = Math.min(this.shakeTimer / 500, 1) * 4;
+      this.cameras.main.setScroll(
+        (Math.random() - 0.5) * intensity * 2,
+        (Math.random() - 0.5) * intensity * 2
+      );
+      if (this.shakeTimer <= 0) this.cameras.main.setScroll(0, 0);
+    }
+
+    /* ── red flash (lose) ── */
+    if (this.redFlashAlpha > 0) {
+      this.g.fillStyle(0xff0000, this.redFlashAlpha);
+      this.g.fillRect(0, 0, 800, 600);
+      this.redFlashAlpha -= delta * 0.0005;
+      if (this.redFlashAlpha < 0) this.redFlashAlpha = 0;
+    }
+  }
+
+  /* ── confetti helpers ──────────────────────────────────────────── */
+  private spawnConfetti(): void {
+    const colors = [0x22ff66, 0xffd700, 0x44ffaa, 0xffee44, 0x88ff88];
+    for (let i = 0; i < 60; i++) {
+      this.confetti.push({
+        x: 400 + (Math.random() - 0.5) * 300,
+        y: 50 + Math.random() * 100,
+        vx: (Math.random() - 0.5) * 3,
+        vy: Math.random() * 1.5 + 0.5,
+        color: colors[Math.floor(Math.random() * colors.length)]!,
+        size: 3 + Math.random() * 4,
+        life: 0,
+        maxLife: 2500 + Math.random() * 1000,
+        rotation: Math.random() * Math.PI * 2,
+        rotSpeed: (Math.random() - 0.5) * 0.1,
+      });
+    }
+  }
+
+  private updateConfetti(delta: number): void {
+    for (let i = this.confetti.length - 1; i >= 0; i--) {
+      const p = this.confetti[i]!;
+      p.life += delta;
+      if (p.life > p.maxLife) { this.confetti.splice(i, 1); continue; }
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.02;
+      p.rotation += p.rotSpeed;
+      const fading = 1 - p.life / p.maxLife;
+      this.g.fillStyle(p.color, fading * 0.85);
+      this.g.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size * 0.6);
+    }
   }
 }
